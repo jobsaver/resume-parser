@@ -2,7 +2,7 @@ import os
 import json
 import tempfile
 from pathlib import Path
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from dotenv import load_dotenv
 import traceback
@@ -16,7 +16,7 @@ from parsers.pdf_extractor import extract_text_from_pdf
 from parsers.resume_parser import parse_resume
 from database import init_db, close_db, save_parsed_resume, get_resume, get_user_resumes, validate_token
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 CORS(app)
 
 # Configuration
@@ -33,6 +33,11 @@ init_db()
 
 # Register function to close database connection on application exit
 atexit.register(close_db)
+
+@app.route('/')
+def serve_frontend():
+    """Serve the frontend HTML page"""
+    return send_from_directory(app.static_folder, 'index.html')
 
 @app.route('/health', methods=['GET'])
 def health_check():
