@@ -171,11 +171,56 @@ def parse_resume_endpoint():
                 'fullName': parsed_data.get('name', ''),
                 'email': parsed_data.get('email', ''),
                 'phone': parsed_data.get('phone', ''),
+                'linkedIn': parsed_data.get('linkedin', ''),
+                'location': parsed_data.get('location', ''),
+                'websites': parsed_data.get('websites', []),
+                'summary': parsed_data.get('summary', ''),
                 'experience': ', '.join(parsed_data.get('experience', []))[:100] + '...' if len(', '.join(parsed_data.get('experience', []))) > 100 else ', '.join(parsed_data.get('experience', [])),
                 'education': ', '.join(parsed_data.get('education', []))[:100] + '...' if len(', '.join(parsed_data.get('education', []))) > 100 else ', '.join(parsed_data.get('education', [])),
-                'skills': parsed_data.get('skills', [])
+                'skills': parsed_data.get('skills', []),
+                'industry': parsed_data.get('industry', []),
+                'jobTitles': parsed_data.get('job_titles', []),
+                'yearsOfExperience': parsed_data.get('years_of_experience', ''),
+                'projects': parsed_data.get('projects', []),
+                'certifications': parsed_data.get('certifications', []),
+                'achievements': parsed_data.get('achievements', []),
+                'publications': parsed_data.get('publications', []),
+                'languages': parsed_data.get('languages', []),
+                'volunteer': parsed_data.get('volunteer', [])
             }
         }
+        
+        # Add dynamically extracted fields if available
+        if 'dynamic_fields' in parsed_data:
+            dynamic_data = parsed_data['dynamic_fields']
+            
+            # Add custom sections from dynamic fields
+            if 'custom_sections' in dynamic_data:
+                result['customSections'] = dynamic_data['custom_sections']
+            
+            # Add key-value pairs
+            if 'key_value_pairs' in dynamic_data:
+                result['additionalFields'] = dynamic_data['key_value_pairs']
+            
+            # Add domain terminology
+            if 'domain_terminology' in dynamic_data:
+                result['questionnaireData']['domainTerminology'] = dynamic_data['domain_terminology']
+            
+            # Add content clusters
+            if 'content_clusters' in dynamic_data:
+                result['contentClusters'] = dynamic_data['content_clusters']
+            
+            # Add named entities from spaCy
+            if 'entities' in dynamic_data:
+                result['namedEntities'] = dynamic_data['entities']
+                
+                # Add organizations to results if available
+                if 'organizations' in dynamic_data['entities']:
+                    result['questionnaireData']['organizations'] = dynamic_data['entities']['organizations']
+            
+            # Add topic modeling results
+            if 'topics' in dynamic_data:
+                result['topicModeling'] = dynamic_data['topics']
         
         # Save to database
         resume_id = save_parsed_resume(
