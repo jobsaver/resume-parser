@@ -6,6 +6,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from dotenv import load_dotenv
 import traceback
+import atexit
 
 # Load environment variables
 load_dotenv()
@@ -13,6 +14,7 @@ load_dotenv()
 # Import parsers
 from parsers.pdf_extractor import extract_text_from_pdf
 from parsers.resume_parser import parse_resume
+from database import init_db, close_db, save_parsed_resume, get_resume, get_user_resumes, validate_token
 
 app = Flask(__name__)
 CORS(app)
@@ -26,6 +28,12 @@ UPLOAD_FOLDER.mkdir(exist_ok=True)
 # Configure maximum file size (10MB)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
 
+# Initialize database connection
+init_db()
+
+# Register function to close database connection on application exit
+atexit.register(close_db)
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -35,9 +43,59 @@ def health_check():
         'version': '1.0.0'
     })
 
+def authenticate_request():
+    """
+    Authenticate the request using the token from headers or query parameters
+    
+    Returns:
+        tuple: (user_id, token, error_response)
+        If authentication fails, error_response will be a Flask response object
+        Otherwise, error_response will be None
+    """
+    # Get authentication token and user ID from request
+    token = request.headers.get('Authorization')
+    
+    # If token is in the format "Bearer <token>", extract the token
+    if token and token.startswith('Bearer '):
+        token = token.split(' ')[1]
+    
+    # If token is not in headers, try to get it from query parameters
+    if not token:
+        token = request.args.get('token')
+    
+    # Get user ID from query parameters
+    user_id = request.args.get('user_id')
+    
+    # Validate inputs
+    if not token:
+        return None, None, jsonify({
+            'success': False,
+            'error': 'Authentication token is required'
+        }), 401
+    
+    if not user_id:
+        return None, None, jsonify({
+            'success': False,
+            'error': 'User ID is required'
+        }), 400
+    
+    # Validate token
+    if not validate_token(token):
+        return None, None, jsonify({
+            'success': False,
+            'error': 'Invalid authentication token'
+        }), 401
+    
+    return user_id, token, None
+
 @app.route('/api/parse', methods=['POST'])
 def parse_resume_endpoint():
     """Parse a resume and extract structured information"""
+    # Authenticate request
+    user_id, token, error_response = authenticate_request()
+    if error_response:
+        return error_response
+    
     if 'resume' not in request.files:
         return jsonify({
             'success': False,
@@ -78,6 +136,18 @@ def parse_resume_endpoint():
             }
         }
         
+        # Save to database
+        resume_id = save_parsed_resume(
+            user_id=user_id, 
+            token=token,
+            file_name=file.filename,
+            parsed_data=parsed_data,
+            text_content=text_content
+        )
+        
+        # Add the resume ID to the response
+        result['resume_id'] = resume_id
+        
         # Remove the temporary file
         temp_file_path.unlink(missing_ok=True)
         
@@ -103,6 +173,11 @@ def parse_resume_endpoint():
 @app.route('/api/extract-text', methods=['POST'])
 def extract_text():
     """Extract plain text from a PDF resume"""
+    # Authenticate request
+    user_id, token, error_response = authenticate_request()
+    if error_response:
+        return error_response
+    
     if 'resume' not in request.files:
         return jsonify({
             'success': False,
@@ -144,6 +219,76 @@ def extract_text():
         # Remove the temporary file if it exists
         if 'temp_file_path' in locals():
             temp_file_path.unlink(missing_ok=True)
+        
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/resume/<resume_id>', methods=['GET'])
+def get_resume_endpoint(resume_id):
+    """Retrieve a resume by ID"""
+    # Authenticate request
+    user_id, token, error_response = authenticate_request()
+    if error_response:
+        return error_response
+    
+    try:
+        # Get resume from database
+        resume = get_resume(resume_id)
+        
+        if not resume:
+            return jsonify({
+                'success': False,
+                'error': 'Resume not found'
+            }), 404
+        
+        # Check if the resume belongs to the authenticated user
+        if resume.get('user_id') != user_id:
+            return jsonify({
+                'success': False,
+                'error': 'Unauthorized access to resume'
+            }), 403
+        
+        return jsonify({
+            'success': True,
+            'data': resume
+        })
+    
+    except Exception as e:
+        # Log the full error
+        print(f"Error retrieving resume: {str(e)}")
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/user/resumes', methods=['GET'])
+def get_user_resumes_endpoint():
+    """Retrieve all resumes for a user"""
+    # Authenticate request
+    user_id, token, error_response = authenticate_request()
+    if error_response:
+        return error_response
+    
+    try:
+        # Get resumes from database
+        resumes = get_user_resumes(user_id)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'resumes': resumes,
+                'count': len(resumes)
+            }
+        })
+    
+    except Exception as e:
+        # Log the full error
+        print(f"Error retrieving user resumes: {str(e)}")
+        traceback.print_exc()
         
         return jsonify({
             'success': False,
