@@ -17,7 +17,8 @@ from parsers.resume_parser import parse_resume
 from database import init_db, close_db, save_parsed_resume, get_resume, get_user_resumes, validate_token
 
 app = Flask(__name__, static_folder='static')
-CORS(app)
+# Configure CORS to allow all origins and methods for testing
+CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"]}})
 
 # Configuration
 PORT = int(os.getenv("PORT", 5002))
@@ -39,6 +40,16 @@ def serve_frontend():
     """Serve the frontend HTML page"""
     return send_from_directory(app.static_folder, 'index.html')
 
+@app.route('/css/<path:filename>')
+def serve_css(filename):
+    """Serve CSS files"""
+    return send_from_directory(os.path.join(app.static_folder, 'css'), filename)
+
+@app.route('/js/<path:filename>')
+def serve_js(filename):
+    """Serve JavaScript files"""
+    return send_from_directory(os.path.join(app.static_folder, 'js'), filename)
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -50,14 +61,14 @@ def health_check():
 
 def authenticate_request():
     """
-    Authenticate the request using the token from headers or query parameters
+    Authenticate the request using the token from headers, query parameters, or form data
     
     Returns:
         tuple: (user_id, token, error_response)
         If authentication fails, error_response will be a Flask response object
         Otherwise, error_response will be None
     """
-    # Get authentication token and user ID from request
+    # Get authentication token from headers
     token = request.headers.get('Authorization')
     
     # If token is in the format "Bearer <token>", extract the token
@@ -68,38 +79,63 @@ def authenticate_request():
     if not token:
         token = request.args.get('token')
     
-    # Get user ID from query parameters
-    user_id = request.args.get('user_id')
+    # If token is not in query parameters, try to get it from form data
+    if not token:
+        token = request.form.get('token')
+    
+    # Get user ID from query parameters or form data
+    user_id = request.args.get('user_id') or request.form.get('user_id')
+    
+    print(f"Auth request: user_id={user_id}, token={token[:4] if token else 'None'}...")
     
     # Validate inputs
     if not token:
-        return None, None, jsonify({
+        return None, None, (jsonify({
             'success': False,
             'error': 'Authentication token is required'
-        }), 401
+        }), 401)
     
     if not user_id:
-        return None, None, jsonify({
+        return None, None, (jsonify({
             'success': False,
             'error': 'User ID is required'
-        }), 400
+        }), 400)
     
-    # Validate token
-    if not validate_token(token):
-        return None, None, jsonify({
+    # Validate token for specific user
+    if not validate_token(user_id, token):
+        return None, None, (jsonify({
             'success': False,
             'error': 'Invalid authentication token'
-        }), 401
+        }), 401)
     
     return user_id, token, None
 
-@app.route('/api/parse', methods=['POST'])
+@app.route('/api/parse', methods=['POST', 'OPTIONS'])
 def parse_resume_endpoint():
     """Parse a resume and extract structured information"""
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 204
+        
+    # Log request details
+    print("Request received at /api/parse:")
+    print(f"Method: {request.method}")
+    print(f"Form data: {list(request.form.keys())}")
+    print(f"Files: {list(request.files.keys())}")
+    print(f"Args: {list(request.args.keys())}")
+    
     # Authenticate request
-    user_id, token, error_response = authenticate_request()
-    if error_response:
-        return error_response
+    try:
+        user_id, token, error_response = authenticate_request()
+        if error_response:
+            return error_response
+    except Exception as e:
+        print(f"Authentication error: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Authentication error: {str(e)}'
+        }), 500
     
     if 'resume' not in request.files:
         return jsonify({
@@ -175,13 +211,25 @@ def parse_resume_endpoint():
             'error': str(e)
         }), 500
 
-@app.route('/api/extract-text', methods=['POST'])
+@app.route('/api/extract-text', methods=['POST', 'OPTIONS'])
 def extract_text():
     """Extract plain text from a PDF resume"""
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     # Authenticate request
-    user_id, token, error_response = authenticate_request()
-    if error_response:
-        return error_response
+    try:
+        user_id, token, error_response = authenticate_request()
+        if error_response:
+            return error_response
+    except Exception as e:
+        print(f"Authentication error: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Authentication error: {str(e)}'
+        }), 500
     
     if 'resume' not in request.files:
         return jsonify({
@@ -230,13 +278,25 @@ def extract_text():
             'error': str(e)
         }), 500
 
-@app.route('/api/resume/<resume_id>', methods=['GET'])
+@app.route('/api/resume/<resume_id>', methods=['GET', 'OPTIONS'])
 def get_resume_endpoint(resume_id):
     """Retrieve a resume by ID"""
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     # Authenticate request
-    user_id, token, error_response = authenticate_request()
-    if error_response:
-        return error_response
+    try:
+        user_id, token, error_response = authenticate_request()
+        if error_response:
+            return error_response
+    except Exception as e:
+        print(f"Authentication error: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Authentication error: {str(e)}'
+        }), 500
     
     try:
         # Get resume from database
@@ -270,13 +330,25 @@ def get_resume_endpoint(resume_id):
             'error': str(e)
         }), 500
 
-@app.route('/api/user/resumes', methods=['GET'])
+@app.route('/api/user/resumes', methods=['GET', 'OPTIONS'])
 def get_user_resumes_endpoint():
     """Retrieve all resumes for a user"""
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     # Authenticate request
-    user_id, token, error_response = authenticate_request()
-    if error_response:
-        return error_response
+    try:
+        user_id, token, error_response = authenticate_request()
+        if error_response:
+            return error_response
+    except Exception as e:
+        print(f"Authentication error: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Authentication error: {str(e)}'
+        }), 500
     
     try:
         # Get resumes from database

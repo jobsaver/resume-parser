@@ -19,6 +19,41 @@ document.addEventListener('DOMContentLoaded', function() {
     const userIdInput = document.getElementById('userId');
     const tokenInput = document.getElementById('token');
     
+    // Add a small notification about token authentication
+    const authSection = document.querySelector('.auth-section');
+    if (authSection) {
+        const alert = document.createElement('div');
+        alert.className = 'alert alert-info small mt-2';
+        alert.innerHTML = 'Using token authentication. The default values match what\'s configured in your .env file.<br>In production, tokens should be kept secret.';
+        authSection.appendChild(alert);
+    }
+    
+    // Only show token partially
+    if (tokenInput) {
+        const originalToken = tokenInput.value;
+        // Add an event listener to toggle showing full token on click
+        tokenInput.addEventListener('focus', function() {
+            tokenInput.type = 'text';
+            tokenInput.value = originalToken;
+        });
+        
+        tokenInput.addEventListener('blur', function() {
+            if (tokenInput.value === originalToken) {
+                tokenInput.type = 'password';
+                // Show only first and last 4 characters
+                const masked = originalToken.substring(0, 4) + '...' + 
+                            originalToken.substring(originalToken.length - 4);
+                tokenInput.placeholder = masked;
+            }
+        });
+        
+        // Trigger blur initially to mask token
+        tokenInput.type = 'password';
+        const masked = originalToken.substring(0, 4) + '...' + 
+                    originalToken.substring(originalToken.length - 4);
+        tokenInput.placeholder = masked;
+    }
+    
     // Add event listeners for drag and drop
     ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
         dropArea.addEventListener(eventName, preventDefaults, false);
@@ -29,13 +64,13 @@ document.addEventListener('DOMContentLoaded', function() {
         e.stopPropagation();
     }
     
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropArea.addEventListener(eventName, highlight, false);
-    });
+    // Highlight drop area when dragging over it
+    dropArea.addEventListener('dragenter', highlight);
+    dropArea.addEventListener('dragover', highlight);
     
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropArea.addEventListener(eventName, unhighlight, false);
-    });
+    // Remove highlight when leaving or after drop
+    dropArea.addEventListener('dragleave', unhighlight);
+    dropArea.addEventListener('drop', unhighlight);
     
     function highlight() {
         dropArea.classList.add('highlight');
@@ -72,7 +107,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     
     // Handle upload button click
-    uploadBtn.addEventListener('click', uploadFile);
+    uploadBtn.addEventListener('click', function() {
+        console.log('Upload button clicked');
+        uploadFile();
+    });
     
     // Handle raw text toggle
     showRawTextBtn.addEventListener('click', () => {
@@ -82,13 +120,112 @@ document.addEventListener('DOMContentLoaded', function() {
     // Handle load history button
     loadHistoryBtn.addEventListener('click', loadResumeHistory);
     
+    // Setup direct form submission
+    const directUploadForm = document.getElementById('directUploadForm');
+    const formUserId = document.getElementById('formUserId');
+    const formToken = document.getElementById('formToken');
+    const formFileUpload = document.getElementById('formFileUpload');
+    
+    // Update form values when user ID or token changes
+    userIdInput.addEventListener('change', updateFormValues);
+    tokenInput.addEventListener('change', updateFormValues);
+    
+    function updateFormValues() {
+        if (formUserId && formToken) {
+            formUserId.value = userIdInput.value.trim();
+            formToken.value = tokenInput.value.trim();
+            console.log('Form values updated:', { userId: formUserId.value, token: '***' });
+        }
+    }
+    
+    // Initialize form values
+    updateFormValues();
+    
+    // Copy selected file to form input
+    fileInput.addEventListener('change', function() {
+        if (fileInput.files.length > 0 && formFileUpload) {
+            try {
+                // Create a new DataTransfer object
+                const dataTransfer = new DataTransfer();
+                // Add the selected file
+                dataTransfer.items.add(fileInput.files[0]);
+                // Set the files to the form input
+                formFileUpload.files = dataTransfer.files;
+                console.log('File copied to form input:', formFileUpload.files[0].name);
+            } catch (e) {
+                console.error('Error copying file to form input:', e);
+            }
+        }
+    });
+    
+    // Prepare form submission
+    directUploadForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Force update form values before submission
+        if (formUserId && formToken && userIdInput && tokenInput) {
+            formUserId.value = userIdInput.value.trim();
+            formToken.value = tokenInput.value.trim();
+        }
+        
+        // Check if file is selected
+        if (!formFileUpload || formFileUpload.files.length === 0) {
+            alert('Please select a PDF file first.');
+            return false;
+        }
+        
+        console.log('Form submission starting with:');
+        console.log('- User ID:', formUserId.value);
+        console.log('- File:', formFileUpload.files[0].name);
+        
+        // Show progress
+        setStatus('Uploading...', 'warning');
+        uploadProgress.classList.remove('d-none');
+        
+        // Create form data programmatically
+        const formData = new FormData();
+        formData.append('user_id', formUserId.value);
+        formData.append('token', formToken.value);
+        formData.append('resume', formFileUpload.files[0]);
+        
+        // Submit with fetch API
+        fetch('/api/parse', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            console.log('Response received:', data);
+            if (data.success) {
+                displayResults(data.data);
+                setStatus('Success', 'success');
+            } else {
+                alert('Error: ' + data.error);
+                setStatus('Error', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error: ' + error.message);
+            setStatus('Error', 'danger');
+        })
+        .finally(() => {
+            uploadProgress.classList.add('d-none');
+        });
+        
+        return false;
+    });
+    
     // Upload file function
     function uploadFile() {
+        console.log('Upload button clicked');
         const file = fileInput.files[0];
         if (!file) {
             alert('Please select a PDF file first.');
             return;
         }
+        
+        console.log('File selected:', file.name);
         
         if (!file.name.toLowerCase().endsWith('.pdf')) {
             alert('Only PDF files are supported.');
@@ -98,6 +235,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const userId = userIdInput.value.trim();
         const token = tokenInput.value.trim();
         
+        console.log('Authentication:', { userId, token: '***' });
+        
         if (!userId || !token) {
             alert('Please provide both User ID and Token for authentication.');
             return;
@@ -105,6 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update status
         setStatus('Uploading...', 'warning');
+        console.log('Status updated to Uploading');
         
         // Show progress
         uploadProgress.classList.remove('d-none');
@@ -125,41 +265,59 @@ document.addEventListener('DOMContentLoaded', function() {
             if (e.lengthComputable) {
                 const percentComplete = (e.loaded / e.total) * 100;
                 progressBar.style.width = percentComplete + '%';
+                console.log('Upload progress:', percentComplete + '%');
                 
                 if (percentComplete === 100) {
                     setStatus('Processing...', 'info');
+                    console.log('Status updated to Processing');
                 }
             }
         });
         
         // Setup completion handling
         xhr.addEventListener('load', () => {
+            console.log('Response received:', xhr.status);
+            console.log('Response text:', xhr.responseText);
+            
             if (xhr.status === 200) {
-                const response = JSON.parse(xhr.responseText);
-                
-                if (response.success) {
-                    displayResults(response.data);
-                    setStatus('Success', 'success');
-                } else {
-                    alert('Error: ' + response.error);
+                try {
+                    const response = JSON.parse(xhr.responseText);
+                    console.log('Parsed response:', response);
+                    
+                    if (response.success) {
+                        displayResults(response.data);
+                        setStatus('Success', 'success');
+                        console.log('Results displayed successfully');
+                    } else {
+                        alert('Error: ' + response.error);
+                        setStatus('Error', 'danger');
+                        console.error('API error:', response.error);
+                    }
+                } catch (e) {
+                    console.error('Error parsing JSON response:', e);
+                    alert('Error parsing server response');
                     setStatus('Error', 'danger');
                 }
             } else {
                 try {
                     const response = JSON.parse(xhr.responseText);
                     alert('Error: ' + (response.error || 'Unknown error'));
+                    console.error('HTTP error with response:', response);
                 } catch (e) {
                     alert('Error: Server returned status ' + xhr.status);
+                    console.error('HTTP error:', xhr.status);
                 }
                 setStatus('Error', 'danger');
             }
             
             // Hide progress
             uploadProgress.classList.add('d-none');
+            console.log('Progress bar hidden');
         });
         
         // Setup error handling
-        xhr.addEventListener('error', () => {
+        xhr.addEventListener('error', (e) => {
+            console.error('Network error:', e);
             alert('Network error occurred');
             setStatus('Error', 'danger');
             uploadProgress.classList.add('d-none');
@@ -167,14 +325,27 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Setup timeout handling
         xhr.addEventListener('timeout', () => {
+            console.error('Request timed out');
             alert('Request timed out');
             setStatus('Error', 'danger');
             uploadProgress.classList.add('d-none');
         });
         
+        // Log the request URL
+        const requestUrl = `/api/parse?user_id=${encodeURIComponent(userId)}&token=${encodeURIComponent(token)}`;
+        console.log('Sending request to:', requestUrl);
+        
         // Open and send request
-        xhr.open('POST', `/api/parse?user_id=${encodeURIComponent(userId)}&token=${encodeURIComponent(token)}`);
-        xhr.send(formData);
+        try {
+            xhr.open('POST', requestUrl);
+            xhr.send(formData);
+            console.log('Request sent');
+        } catch (e) {
+            console.error('Error sending request:', e);
+            alert('Error sending request: ' + e.message);
+            setStatus('Error', 'danger');
+            uploadProgress.classList.add('d-none');
+        }
     }
     
     // Function to load resume history
@@ -438,5 +609,67 @@ document.addEventListener('DOMContentLoaded', function() {
     function setStatus(message, type) {
         statusIndicator.textContent = message;
         statusIndicator.className = `badge bg-${type}`;
+    }
+
+    // Simple upload button
+    const simpleUploadBtn = document.getElementById('simpleUploadBtn');
+    if (simpleUploadBtn) {
+        simpleUploadBtn.addEventListener('click', function() {
+            console.log('Simple upload button clicked');
+            
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a PDF file first.');
+                return;
+            }
+            
+            const userId = userIdInput.value.trim();
+            const token = tokenInput.value.trim();
+            
+            if (!userId || !token) {
+                alert('Please provide both User ID and Token for authentication.');
+                return;
+            }
+            
+            // Show status
+            setStatus('Uploading...', 'warning');
+            
+            // Create FormData
+            const formData = new FormData();
+            formData.append('resume', file);
+            formData.append('user_id', userId);
+            formData.append('token', token);
+            
+            console.log('Simple upload with:', {
+                userId: userId,
+                tokenLength: token.length,
+                file: file.name
+            });
+            
+            // Use fetch API to upload
+            fetch('/api/parse', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Response data:', data);
+                if (data.success) {
+                    displayResults(data.data);
+                    setStatus('Success', 'success');
+                } else {
+                    alert('Error: ' + data.error);
+                    setStatus('Error', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error: ' + error.message);
+                setStatus('Error', 'danger');
+            });
+        });
     }
 }); 

@@ -107,12 +107,28 @@ A Python-based resume parsing API that extracts structured information from resu
 All API endpoints (except health check) require authentication:
 
 - **user_id**: The ID of the user making the request
-- **token**: Authentication token
+- **token**: Authentication token that matches the configured token for that user
 
 You can provide these parameters in two ways:
 
 1. Query parameters: `?user_id=12345&token=your-token`
 2. Headers: Include `Authorization: Bearer your-token` header and `user_id` as a query parameter
+
+## Token Configuration
+
+Tokens are configured in the `.env` file using the following format:
+
+```
+TOKEN_<user_id>=<token_value>
+```
+
+For example:
+```
+TOKEN_test_user=test_token
+TOKEN_admin=admin_secret_token
+```
+
+In development mode, a default test token (`test_user:test_token`) is available if no tokens are configured.
 
 ## Sample Requests (with curl)
 

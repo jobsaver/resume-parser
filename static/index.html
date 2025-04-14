@@ -28,7 +28,7 @@
                                 <div class="col-md-6">
                                     <div class="form-group mb-3">
                                         <label for="token">Authentication Token</label>
-                                        <input type="text" class="form-control" id="token" value="test_token" placeholder="Enter authentication token">
+                                        <input type="text" class="form-control" id="token" value="b23ebd32uiedb3uibd3" placeholder="Enter authentication token">
                                     </div>
                                 </div>
                             </div>
@@ -53,7 +53,18 @@
                                         <p>Drag and drop a PDF resume here, or click to select a file</p>
                                         <input type="file" id="fileUpload" accept=".pdf" class="file-input" />
                                         <div class="mt-3">
-                                            <button id="uploadBtn" class="btn btn-primary">Upload Resume</button>
+                                            <button id="uploadBtn" class="btn btn-primary">Upload Resume (AJAX)</button>
+                                            
+                                            <!-- Direct form submission option -->
+                                            <form id="directUploadForm" action="/api/parse" method="post" enctype="multipart/form-data" class="mt-2">
+                                                <input type="hidden" name="user_id" id="formUserId">
+                                                <input type="hidden" name="token" id="formToken">
+                                                <input type="file" name="resume" id="formFileUpload" accept=".pdf" style="display:none;">
+                                                <button type="submit" class="btn btn-outline-primary">Upload (Direct Form)</button>
+                                            </form>
+                                            
+                                            <!-- Simple POST with Fetch -->
+                                            <button id="simpleUploadBtn" class="btn btn-success mt-2">Simple Upload</button>
                                         </div>
                                     </div>
                                     <div id="uploadProgress" class="progress mt-3 d-none">
