@@ -32,7 +32,18 @@ fi
 if [ ! -f ".env" ]; then
     echo "Creating .env file from example..."
     cp .env.example .env
+    
+    # Make sure MongoDB URI is set
+    if grep -q "MONGO_URI=" .env; then
+        echo "MongoDB URI is set in .env file."
+    else
+        echo "WARNING: MongoDB URI is not set in .env file. Please add it manually."
+    fi
 fi
+
+# Test MongoDB connection
+echo "Testing MongoDB connection..."
+python -c "from database import init_db, close_db; print('Connection successful' if init_db() else 'Connection failed'); close_db()"
 
 # Run the server
 echo "Starting Python Resume Parser server..."
