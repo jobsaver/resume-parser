@@ -15,10 +15,17 @@ source venv/bin/activate
 echo "Installing dependencies..."
 pip install -r requirements.txt
 
-# Install spaCy model if not already installed
-if ! python -c "import spacy; spacy.load('en_core_web_sm')" 2>/dev/null; then
-    echo "Installing spaCy model..."
-    python -m spacy download en_core_web_sm
+# Download NLTK data
+echo "Downloading NLTK data..."
+python -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('stopwords', quiet=True); nltk.download('wordnet', quiet=True); nltk.download('averaged_perceptron_tagger', quiet=True); nltk.download('maxent_ne_chunker', quiet=True); nltk.download('words', quiet=True)"
+
+# Check for Tesseract OCR
+if ! command -v tesseract &> /dev/null; then
+    echo "WARNING: Tesseract OCR not found. OCR functionality will be limited."
+    echo "To install Tesseract OCR:"
+    echo "  - macOS: brew install tesseract"
+    echo "  - Ubuntu/Debian: sudo apt install tesseract-ocr"
+    echo "  - Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki"
 fi
 
 # Create .env file if it doesn't exist
