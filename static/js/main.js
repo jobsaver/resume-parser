@@ -289,22 +289,22 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Display results for extract only
     function displayExtractResults(data) {
-        const parsedData = data.parsedData;
+        const content = data.content || {};
         const textContent = data.textContent;
         
         // Show results section
         extractResultsSection.classList.remove('d-none');
         
         // Set basic information
-        document.getElementById('extractName').textContent = parsedData.name || '';
-        document.getElementById('extractEmail').textContent = parsedData.email || '';
-        document.getElementById('extractPhone').textContent = parsedData.phone || '';
+        document.getElementById('extractName').textContent = content.name || '';
+        document.getElementById('extractEmail').textContent = content.email || '';
+        document.getElementById('extractPhone').textContent = content.phone || '';
         
         // Set skills
         const skillsElement = document.getElementById('extractSkills');
         skillsElement.innerHTML = '';
-        if (parsedData.skills && parsedData.skills.length > 0) {
-            parsedData.skills.forEach(skill => {
+        if (content.skills && content.skills.length > 0) {
+            content.skills.forEach(skill => {
                 const badge = document.createElement('span');
                 badge.className = 'badge bg-secondary me-1 mb-1';
                 badge.textContent = skill;
@@ -317,8 +317,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set education
         const educationElement = document.getElementById('extractEducation');
         educationElement.innerHTML = '';
-        if (parsedData.education && parsedData.education.length > 0) {
-            parsedData.education.forEach(edu => {
+        if (content.education && content.education.length > 0) {
+            content.education.forEach(edu => {
                 const item = document.createElement('div');
                 item.className = 'list-group-item';
                 item.textContent = edu;
@@ -334,8 +334,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set experience
         const experienceElement = document.getElementById('extractExperience');
         experienceElement.innerHTML = '';
-        if (parsedData.experience && parsedData.experience.length > 0) {
-            parsedData.experience.forEach(exp => {
+        if (content.experience && content.experience.length > 0) {
+            content.experience.forEach(exp => {
                 const item = document.createElement('div');
                 item.className = 'list-group-item';
                 item.textContent = exp;
@@ -351,8 +351,8 @@ document.addEventListener('DOMContentLoaded', function() {
         // Set certifications
         const certificationsElement = document.getElementById('extractCertifications');
         certificationsElement.innerHTML = '';
-        if (parsedData.certifications && parsedData.certifications.length > 0) {
-            parsedData.certifications.forEach(cert => {
+        if (content.certifications && content.certifications.length > 0) {
+            content.certifications.forEach(cert => {
                 const item = document.createElement('div');
                 item.className = 'list-group-item';
                 item.textContent = cert;
@@ -366,7 +366,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Set raw text
-        document.getElementById('extractRawText').textContent = parsedData.raw_content || textContent || 'No text content available';
+        document.getElementById('extractRawText').textContent = content.raw_content || textContent || 'No text content available';
     }
     
     // Display results for save resume

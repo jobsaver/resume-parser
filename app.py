@@ -153,10 +153,17 @@ def extract_only_endpoint():
         # Parse the resume
         parsed_data = parse_resume(temp_file_path, text_content)
         
+        # Create a resume_id for consistency with save endpoint
+        temp_resume_id = f"temp_{int(time.time())}_{str(uuid.uuid4())[:8]}"
+        
         # Create the response
         result = {
-            'parsedData': parsed_data,
-            'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content,
+            'resume_id': temp_resume_id,
+            'user_id': 'anonymous',
+            'content': parsed_data,
+            'format': 'standard',
+            'file_url': '',  # No file URL since it's not saved
+            'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content
         }
         
         # Remove the temporary file

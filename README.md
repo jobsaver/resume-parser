@@ -10,6 +10,7 @@ This API allows you to extract structured information from resumes in PDF format
 - Extract certification information
 - Store resume PDFs in DigitalOcean Spaces
 - Raw text content included in response
+- Consistent API response format across endpoints
 
 ## Setup
 
@@ -65,7 +66,9 @@ curl -X POST \
 {
   "success": true,
   "data": {
-    "parsedData": {
+    "resume_id": "temp_1632506789_a7b8c9d0",
+    "user_id": "anonymous",
+    "content": {
       "name": "John Doe",
       "email": "john.doe@example.com",
       "phone": "+1 555-123-4567",
@@ -75,6 +78,8 @@ curl -X POST \
       "certifications": ["AWS Certified Developer", "Google Cloud Professional"],
       "raw_content": "First portion of extracted text..."
     },
+    "format": "standard",
+    "file_url": "",
     "textContent": "First 1000 characters of extracted text..."
   }
 }
@@ -130,10 +135,24 @@ curl -X POST \
       "raw_content": "First portion of extracted text..."
     },
     "format": "standard",
-    "file_url": "https://storage-jobmato.blr1.digitaloceanspaces.com/resumes/user123/user123_1632506789_a7b8c9d0.pdf"
+    "file_url": "https://storage-jobmato.blr1.digitaloceanspaces.com/resumes/user123/user123_1632506789_a7b8c9d0.pdf",
+    "textContent": "First 1000 characters of extracted text..."
   }
 }
 ```
+
+## Response Format
+
+Both API endpoints return responses in the same format for consistency:
+
+| Field | Description |
+|-------|-------------|
+| `resume_id` | Unique identifier for the resume (auto-generated) |
+| `user_id` | User ID (`anonymous` for extract-only endpoint) |
+| `content` | Parsed resume data including name, email, phone, skills, education, experience, certifications, and raw content |
+| `format` | Resume format (always `standard` for extract-only endpoint) |
+| `file_url` | URL to the stored PDF file (empty for extract-only endpoint) |
+| `textContent` | First 1000 characters of extracted text for preview |
 
 ## Authentication
 
