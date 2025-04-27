@@ -83,14 +83,6 @@
                                                     <td><strong>Phone</strong></td>
                                                     <td id="extractPhone"></td>
                                                 </tr>
-                                                <tr>
-                                                    <td><strong>LinkedIn</strong></td>
-                                                    <td id="extractLinkedin"></td>
-                                                </tr>
-                                                <tr>
-                                                    <td><strong>Location</strong></td>
-                                                    <td id="extractLocation"></td>
-                                                </tr>
                                             </table>
                                             
                                             <h5>Skills</h5>
@@ -102,12 +94,10 @@
                                             
                                             <h5>Experience</h5>
                                             <div id="extractExperience" class="list-group"></div>
+                                            
+                                            <h5>Certifications</h5>
+                                            <div id="extractCertifications" class="list-group"></div>
                                         </div>
-                                    </div>
-                                    
-                                    <div class="mt-4">
-                                        <h5>Summary</h5>
-                                        <div id="extractSummary" class="p-3 bg-light rounded"></div>
                                     </div>
                                     
                                     <div class="mt-4">
@@ -127,26 +117,20 @@
                                         This option extracts data from a resume AND saves it to the database. Authentication required.
                                     </div>
                                     <div class="row mb-3">
-                                        <div class="col-md-6">
+                                        <div class="col-md-12">
                                             <div class="form-group">
-                                                <label for="resumeId">Resume ID (optional)</label>
-                                                <input type="text" class="form-control" id="resumeId" placeholder="Enter resume ID">
-                                            </div>
-                                        </div>
-                                        <div class="col-md-6">
-                                            <div class="form-group">
-                                                <label for="resumeFormat">Format</label>
+                                                <label for="resumeFormat">Format (Optional)</label>
                                                 <select class="form-control" id="resumeFormat">
                                                     <option value="standard">Standard</option>
                                                     <option value="ats">ATS</option>
                                                     <option value="detailed">Detailed</option>
                                                 </select>
+                                                <small class="form-text text-muted">The resume format is optional. If not specified, "standard" will be used.</small>
                                             </div>
                                         </div>
                                     </div>
-                                    <div class="form-group mb-3">
-                                        <label for="resumeUrl">Resume URL (optional)</label>
-                                        <input type="text" class="form-control" id="resumeUrl" placeholder="Enter resume URL">
+                                    <div class="alert alert-info">
+                                        <p><strong>Note:</strong> Resume ID will be automatically generated. No need to provide additional parameters.</p>
                                     </div>
                                     <div class="dropzone" id="drop-area-save">
                                         <p>Drag and drop a PDF resume here, or click to select a file</p>
@@ -179,10 +163,6 @@
                                                     <td><strong>Format</strong></td>
                                                     <td id="saveFormat"></td>
                                                 </tr>
-                                                <tr>
-                                                    <td><strong>URL</strong></td>
-                                                    <td id="saveUrl"></td>
-                                                </tr>
                                             </table>
                                         </div>
                                         <div class="col-md-6">
@@ -208,7 +188,7 @@
                     </div>
                     <div class="card-footer text-muted">
                         <div class="d-flex justify-content-between align-items-center">
-                            <span>Resume Parser with OCR Support</span>
+                            <span>Resume Parser with NLP Support</span>
                             <div>
                                 <span id="status" class="badge bg-success">Ready</span>
                             </div>

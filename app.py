@@ -7,6 +7,8 @@ from flask_cors import CORS
 from dotenv import load_dotenv
 import traceback
 import atexit
+import time
+import uuid
 
 # Load environment variables
 load_dotenv()
@@ -205,15 +207,11 @@ def save_resume_endpoint():
             'error': f'Authentication error: {str(e)}'
         }), 500
     
-    # Get resume ID from request
-    resume_id = request.form.get('resume_id')
-    if not resume_id:
-        resume_id = request.args.get('resume_id')
+    # Auto-generate resume ID using timestamp
+    resume_id = f"{user_id}_{int(time.time())}_{str(uuid.uuid4())[:8]}"
         
-    # Get format from request
+    # Get format from request (optional, default to standard)
     resume_format = request.form.get('format', 'standard')
-    if not resume_format:
-        resume_format = request.args.get('format', 'standard')
     
     if 'resume' not in request.files:
         return jsonify({
@@ -249,15 +247,12 @@ def save_resume_endpoint():
             from database import delete_user_resumes
             delete_user_resumes(user_id)
             
-        # Save to database with the provided resume_id if available
-        resume_url = request.form.get('resume_url', '')
-        
         # Create document with simplified structure based on requirements
         document = {
             "resume_id": resume_id,
             "user_id": user_id,
             "content": parsed_data,
-            "url": resume_url,
+            "url": "",  # Not required
             "format": resume_format
         }
         
@@ -270,7 +265,6 @@ def save_resume_endpoint():
             'resume_id': saved_id,
             'user_id': user_id,
             'content': parsed_data,
-            'url': resume_url,
             'format': resume_format
         }
         

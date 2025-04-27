@@ -1,14 +1,14 @@
 # ATS Resume Parser API
 
-This API allows you to extract structured information from resumes in PDF format. It provides comprehensive parsing capabilities using hybrid approaches that combine rule-based extraction, NLP techniques, and machine learning.
+This API allows you to extract structured information from resumes in PDF format. It provides parsing capabilities using regex patterns and NLP techniques to extract data directly from the resume content.
 
 ## Features
 
-- Extract basic information (name, email, phone, LinkedIn)
-- Identify skills across multiple industries (500+ pre-defined skills)
-- Extract education and work experience
-- Detect custom sections and key-value pairs
-- Recognize industry-specific terminology
+- Extract basic information (name, email, phone)
+- Identify skills using natural language processing
+- Extract education and work experience sections
+- Extract certification information
+- Raw text content included in response
 
 ## Setup
 
@@ -24,15 +24,9 @@ pdfminer.six==20221105
 nltk>=3.6.2
 pymongo==4.6.1
 dnspython==2.5.0
-numpy>=1.19.0
-scipy>=1.6.0
-joblib>=1.0.0
-pandas>=1.3.0
 
-# Optional OCR capabilities
-pytesseract==0.3.10
-Pillow>=10.4.0
-pdf2image==1.16.3
+# Optional NLP enhancements
+spacy>=3.0.0
 ```
 
 ### Installation
@@ -46,7 +40,7 @@ pdf2image==1.16.3
 
 ### Extract Only
 
-Extracts structured information from a resume PDF file without saving to the database.
+Extracts structured information from a resume PDF file without saving to the database. No authentication required.
 
 ```
 POST /api/extract-only
@@ -73,13 +67,11 @@ curl -X POST \
       "name": "John Doe",
       "email": "john.doe@example.com",
       "phone": "+1 555-123-4567",
-      "linkedin": "linkedin.com/in/johndoe",
-      "location": "San Francisco, CA",
-      "websites": ["johndoe.com"],
       "skills": ["Python", "JavaScript", "Machine Learning", "React", "Data Analysis"],
       "education": ["Bachelor of Science in Computer Science, Stanford University, 2015-2019"],
       "experience": ["Software Engineer, Tech Corp, Jan 2019 - Present", "Intern, Tech Startup, Summer 2018"],
-      "summary": "Experienced software engineer with a focus on machine learning applications."
+      "certifications": ["AWS Certified Developer", "Google Cloud Professional"],
+      "raw_content": "First portion of extracted text..."
     },
     "textContent": "First 1000 characters of extracted text..."
   }
@@ -88,7 +80,7 @@ curl -X POST \
 
 ### Save Resume
 
-Extracts resume data, saves to the database, and replaces existing data if the same user ID exists.
+Extracts resume data, saves to the database, and replaces existing data if the same user ID exists. Authentication required.
 
 ```
 POST /api/save-resume
@@ -100,9 +92,11 @@ POST /api/save-resume
 
 **Parameters**
 - `resume` - PDF file (multipart/form-data)
-- `resume_id` - Optional resume ID (form data or query parameter)
-- `format` - Resume format, defaults to 'standard' (form data or query parameter)
-- `resume_url` - Optional URL where the resume is stored (form data)
+- `format` - Optional resume format, defaults to 'standard' (form data)
+
+**Notes**
+- Resume ID is automatically generated using a combination of user ID, timestamp, and a unique identifier
+- No need to provide a resume URL or resume ID
 
 **Example Request**
 
@@ -111,9 +105,6 @@ curl -X POST \
   -H "Authorization: Bearer {token}" \
   -F "user_id={user_id}" \
   -F "resume=@/path/to/resume.pdf" \
-  -F "resume_id=12345" \
-  -F "format=standard" \
-  -F "resume_url=https://example.com/resumes/12345.pdf" \
   http://localhost:5002/api/save-resume
 ```
 
@@ -123,21 +114,18 @@ curl -X POST \
 {
   "success": true,
   "data": {
-    "resume_id": "5f4dcc3b5aa765d61d8327deb882cf99",
+    "resume_id": "user123_1632506789_a7b8c9d0",
     "user_id": "user123",
     "content": {
       "name": "John Doe",
       "email": "john.doe@example.com",
       "phone": "+1 555-123-4567",
-      "linkedin": "linkedin.com/in/johndoe",
-      "location": "San Francisco, CA",
-      "websites": ["johndoe.com"],
       "skills": ["Python", "JavaScript", "Machine Learning", "React", "Data Analysis"],
       "education": ["Bachelor of Science in Computer Science, Stanford University, 2015-2019"],
       "experience": ["Software Engineer, Tech Corp, Jan 2019 - Present", "Intern, Tech Startup, Summer 2018"],
-      "summary": "Experienced software engineer with a focus on machine learning applications."
+      "certifications": ["AWS Certified Developer", "Google Cloud Professional"],
+      "raw_content": "First portion of extracted text..."
     },
-    "url": "https://example.com/resumes/12345.pdf",
     "format": "standard"
   }
 }

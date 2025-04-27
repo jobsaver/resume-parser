@@ -26,9 +26,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveProgress = document.getElementById('saveProgress');
     const saveProgressBar = saveProgress.querySelector('.progress-bar');
     const saveResultsSection = document.getElementById('saveResultsSection');
-    const resumeIdInput = document.getElementById('resumeId');
     const resumeFormatInput = document.getElementById('resumeFormat');
-    const resumeUrlInput = document.getElementById('resumeUrl');
     const viewFullContentBtn = document.getElementById('viewFullContent');
     const fullContentSection = document.getElementById('fullContentSection');
     const fullContent = document.getElementById('fullContent');
@@ -234,10 +232,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Get additional parameters
-        const resumeId = resumeIdInput.value.trim();
+        // Get format parameter
         const format = resumeFormatInput.value;
-        const resumeUrl = resumeUrlInput.value.trim();
         
         // Update status
         setStatus('Saving...', 'warning');
@@ -252,16 +248,7 @@ document.addEventListener('DOMContentLoaded', function() {
         formData.append('resume', file);
         formData.append('user_id', userId);
         formData.append('token', token);
-        
-        if (resumeId) {
-            formData.append('resume_id', resumeId);
-        }
-        
         formData.append('format', format);
-        
-        if (resumeUrl) {
-            formData.append('resume_url', resumeUrl);
-        }
         
         // Send request to save-resume endpoint
         fetch('/api/save-resume', {
@@ -312,8 +299,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('extractName').textContent = parsedData.name || '';
         document.getElementById('extractEmail').textContent = parsedData.email || '';
         document.getElementById('extractPhone').textContent = parsedData.phone || '';
-        document.getElementById('extractLinkedin').textContent = parsedData.linkedin || '';
-        document.getElementById('extractLocation').textContent = parsedData.location || '';
         
         // Set skills
         const skillsElement = document.getElementById('extractSkills');
@@ -363,11 +348,25 @@ document.addEventListener('DOMContentLoaded', function() {
             experienceElement.appendChild(item);
         }
         
-        // Set summary
-        document.getElementById('extractSummary').textContent = parsedData.summary || 'No summary available';
+        // Set certifications
+        const certificationsElement = document.getElementById('extractCertifications');
+        certificationsElement.innerHTML = '';
+        if (parsedData.certifications && parsedData.certifications.length > 0) {
+            parsedData.certifications.forEach(cert => {
+                const item = document.createElement('div');
+                item.className = 'list-group-item';
+                item.textContent = cert;
+                certificationsElement.appendChild(item);
+            });
+        } else {
+            const item = document.createElement('div');
+            item.className = 'list-group-item text-muted';
+            item.textContent = 'No certifications detected';
+            certificationsElement.appendChild(item);
+        }
         
         // Set raw text
-        document.getElementById('extractRawText').textContent = textContent || 'No text content available';
+        document.getElementById('extractRawText').textContent = parsedData.raw_content || textContent || 'No text content available';
     }
     
     // Display results for save resume
@@ -379,7 +378,6 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('saveResId').textContent = data.resume_id || '';
         document.getElementById('saveUserId').textContent = data.user_id || '';
         document.getElementById('saveFormat').textContent = data.format || '';
-        document.getElementById('saveUrl').textContent = data.url || '';
         
         // Set content sample
         const content = data.content || {};
