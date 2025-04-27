@@ -34,7 +34,7 @@ fi
 # Install dependencies with verbose output
 echo "Installing dependencies..."
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install --only-binary=Pillow -r requirements.txt
 
 # Verify critical dependencies
 echo "Verifying critical dependencies..."
