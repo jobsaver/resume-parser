@@ -11,6 +11,7 @@ This API allows you to extract structured information from resumes in PDF format
 - Store resume PDFs in DigitalOcean Spaces
 - Raw text content included in response
 - Consistent API response format across endpoints
+- Automatic replacement of existing resumes for the same user
 
 ## Setup
 
@@ -105,6 +106,7 @@ POST /api/save-resume
 - Resume ID is automatically generated using a combination of user ID, timestamp, and a unique identifier
 - PDF file is uploaded to DigitalOcean Spaces for storage and retrieval
 - The file URL is stored in the database along with the parsed resume data
+- **When a new resume is uploaded for an existing user, the old resume(s) are automatically deleted** from both the database and DigitalOcean Spaces storage
 
 **Example Request**
 
@@ -140,6 +142,17 @@ curl -X POST \
   }
 }
 ```
+
+## Resume Replacement
+
+The API automatically manages resume replacement for users:
+
+1. When a user uploads a new resume, the system checks if they already have one or more resumes in the database
+2. If existing resumes are found, the system:
+   - Deletes all associated PDF files from DigitalOcean Spaces storage
+   - Removes all previous resume records from the database for that user
+3. The new resume is then saved with a fresh ID and stored in both the database and DigitalOcean Spaces
+4. This ensures users always have only their most recent resume in the system
 
 ## Response Format
 
