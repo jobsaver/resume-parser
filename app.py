@@ -17,7 +17,7 @@ load_dotenv()
 from parsers.pdf_extractor import extract_text_from_pdf
 from parsers.resume_parser import parse_resume
 from database import init_db, close_db, validate_token, get_user_resumes
-from storage import upload_file_to_spaces, generate_spaces_key
+from storage import upload_file_to_spaces, generate_spaces_key, delete_file_from_spaces
 
 app = Flask(__name__, static_folder='static')
 # Configure CORS to allow all origins and methods for testing
@@ -248,11 +248,27 @@ def save_resume_endpoint():
         parsed_data = parse_resume(temp_file_path, text_content)
         
         # Get user's existing resumes
+        from database import get_user_resumes, delete_user_resumes
         existing_resumes = get_user_resumes(user_id)
         
-        # If user already has resumes, delete them (replace with new one)
+        # If user already has resumes, delete them from database and storage
         if existing_resumes:
-            from database import delete_user_resumes
+            print(f"Found existing resumes for user {user_id}. Replacing with new resume.")
+            
+            # Delete from DigitalOcean Spaces
+            for resume in existing_resumes:
+                # Extract the object key from the URL
+                if resume.get('url'):
+                    # The URL format is: https://storage-jobmato.blr1.digitaloceanspaces.com/resumes/user_id/resume_id.pdf
+                    # We need to extract the "resumes/user_id/resume_id.pdf" part
+                    url_parts = resume['url'].split('/')
+                    if len(url_parts) >= 4:  # Make sure URL has enough parts
+                        object_key = '/'.join(url_parts[3:])  # Skip protocol and domain
+                        print(f"Deleting file from Spaces: {object_key}")
+                        delete_file_from_spaces(object_key)
+            
+            # Delete from database
+            print(f"Deleting resumes from database for user {user_id}")
             delete_user_resumes(user_id)
             
         # Upload file to DigitalOcean Spaces
@@ -287,7 +303,8 @@ def save_resume_endpoint():
             'user_id': user_id,
             'content': parsed_data,
             'format': resume_format,
-            'file_url': file_url
+            'file_url': file_url,
+            'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content
         }
         
         # Remove the temporary file
