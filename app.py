@@ -17,6 +17,7 @@ load_dotenv()
 from parsers.pdf_extractor import extract_text_from_pdf
 from parsers.resume_parser import parse_resume
 from database import init_db, close_db, validate_token, get_user_resumes
+from storage import upload_file_to_spaces, generate_spaces_key
 
 app = Flask(__name__, static_folder='static')
 # Configure CORS to allow all origins and methods for testing
@@ -247,12 +248,25 @@ def save_resume_endpoint():
             from database import delete_user_resumes
             delete_user_resumes(user_id)
             
+        # Upload file to DigitalOcean Spaces
+        spaces_key = generate_spaces_key(user_id, resume_id, file.filename)
+        upload_success, spaces_result = upload_file_to_spaces(temp_file_path, spaces_key, 'application/pdf')
+        
+        if not upload_success:
+            return jsonify({
+                'success': False,
+                'error': f'Error uploading file to DigitalOcean Spaces: {spaces_result}'
+            }), 500
+            
+        # Store the file URL
+        file_url = spaces_result
+        
         # Create document with simplified structure based on requirements
         document = {
             "resume_id": resume_id,
             "user_id": user_id,
             "content": parsed_data,
-            "url": "",  # Not required
+            "url": file_url,
             "format": resume_format
         }
         
@@ -265,7 +279,8 @@ def save_resume_endpoint():
             'resume_id': saved_id,
             'user_id': user_id,
             'content': parsed_data,
-            'format': resume_format
+            'format': resume_format,
+            'file_url': file_url
         }
         
         # Remove the temporary file

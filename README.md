@@ -8,6 +8,7 @@ This API allows you to extract structured information from resumes in PDF format
 - Identify skills using natural language processing
 - Extract education and work experience sections
 - Extract certification information
+- Store resume PDFs in DigitalOcean Spaces
 - Raw text content included in response
 
 ## Setup
@@ -24,6 +25,7 @@ pdfminer.six==20221105
 nltk>=3.6.2
 pymongo==4.6.1
 dnspython==2.5.0
+boto3>=1.28.0
 
 # Optional NLP enhancements
 spacy>=3.0.0
@@ -80,7 +82,7 @@ curl -X POST \
 
 ### Save Resume
 
-Extracts resume data, saves to the database, and replaces existing data if the same user ID exists. Authentication required.
+Extracts resume data, saves to the database, and stores the PDF in DigitalOcean Spaces. Authentication required.
 
 ```
 POST /api/save-resume
@@ -96,7 +98,8 @@ POST /api/save-resume
 
 **Notes**
 - Resume ID is automatically generated using a combination of user ID, timestamp, and a unique identifier
-- No need to provide a resume URL or resume ID
+- PDF file is uploaded to DigitalOcean Spaces for storage and retrieval
+- The file URL is stored in the database along with the parsed resume data
 
 **Example Request**
 
@@ -126,7 +129,8 @@ curl -X POST \
       "certifications": ["AWS Certified Developer", "Google Cloud Professional"],
       "raw_content": "First portion of extracted text..."
     },
-    "format": "standard"
+    "format": "standard",
+    "file_url": "https://storage-jobmato.blr1.digitaloceanspaces.com/resumes/user123/user123_1632506789_a7b8c9d0.pdf"
   }
 }
 ```
@@ -139,6 +143,14 @@ The API uses simple token-based authentication. To authenticate requests:
 2. Add a `user_id` parameter in query parameters or form data.
 
 Tokens are defined in environment variables with the format `TOKEN_<user_id>=<token_value>`.
+
+## File Storage
+
+Resume files are stored in DigitalOcean Spaces:
+
+1. Files are organized by user ID: `resumes/{user_id}/{resume_id}.pdf`
+2. Each file is publicly accessible via the URL returned in the API response
+3. Configuration is done through environment variables (see `.env.example`)
 
 ## Error Handling
 
