@@ -37,94 +37,171 @@
                         <!-- Tabs -->
                         <ul class="nav nav-tabs" id="myTab" role="tablist">
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button" role="tab" aria-controls="upload" aria-selected="true">Upload Resume</button>
+                                <button class="nav-link active" id="extract-only-tab" data-bs-toggle="tab" data-bs-target="#extract-only" type="button" role="tab" aria-controls="extract-only" aria-selected="true">Extract Only</button>
                             </li>
                             <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab" aria-controls="history" aria-selected="false">Resume History</button>
+                                <button class="nav-link" id="save-resume-tab" data-bs-toggle="tab" data-bs-target="#save-resume" type="button" role="tab" aria-controls="save-resume" aria-selected="false">Save Resume</button>
                             </li>
                         </ul>
                         
                         <!-- Tab Content -->
                         <div class="tab-content p-3 border border-top-0 rounded-bottom" id="myTabContent">
-                            <!-- Upload Tab -->
-                            <div class="tab-pane fade show active" id="upload" role="tabpanel" aria-labelledby="upload-tab">
+                            <!-- Extract Only Tab -->
+                            <div class="tab-pane fade show active" id="extract-only" role="tabpanel" aria-labelledby="extract-only-tab">
                                 <div class="upload-section text-center p-4">
-                                    <div class="dropzone" id="drop-area">
+                                    <div class="alert alert-info">
+                                        This option extracts data from a resume without saving it to the database. No authentication required.
+                                    </div>
+                                    <div class="dropzone" id="drop-area-extract">
                                         <p>Drag and drop a PDF resume here, or click to select a file</p>
-                                        <input type="file" id="fileUpload" accept=".pdf" class="file-input" />
+                                        <input type="file" id="fileUploadExtract" accept=".pdf" class="file-input" />
                                         <div class="mt-3">
-                                            <button id="uploadBtn" class="btn btn-primary">Upload Resume (AJAX)</button>
-                                            
-                                            <!-- Direct form submission option -->
-                                            <form id="directUploadForm" action="/api/parse" method="post" enctype="multipart/form-data" class="mt-2">
-                                                <input type="hidden" name="user_id" id="formUserId">
-                                                <input type="hidden" name="token" id="formToken">
-                                                <input type="file" name="resume" id="formFileUpload" accept=".pdf" style="display:none;">
-                                                <button type="submit" class="btn btn-outline-primary">Upload (Direct Form)</button>
-                                            </form>
-                                            
-                                            <!-- Simple POST with Fetch -->
-                                            <button id="simpleUploadBtn" class="btn btn-success mt-2">Simple Upload</button>
+                                            <button id="extractOnlyBtn" class="btn btn-primary">Extract Resume Data</button>
                                         </div>
                                     </div>
-                                    <div id="uploadProgress" class="progress mt-3 d-none">
+                                    <div id="extractProgress" class="progress mt-3 d-none">
                                         <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
                                     </div>
                                 </div>
                                 
-                                <!-- Results Section -->
-                                <div id="resultsSection" class="mt-4 d-none">
-                                    <h4 class="border-bottom pb-2">Parsed Results</h4>
+                                <!-- Results Section for Extract Only -->
+                                <div id="extractResultsSection" class="mt-4 d-none">
+                                    <h4 class="border-bottom pb-2">Extracted Results</h4>
                                     <div class="row">
                                         <div class="col-md-6">
                                             <h5>Basic Information</h5>
                                             <table class="table table-bordered">
                                                 <tr>
                                                     <td><strong>Name</strong></td>
-                                                    <td id="name"></td>
+                                                    <td id="extractName"></td>
                                                 </tr>
                                                 <tr>
                                                     <td><strong>Email</strong></td>
-                                                    <td id="email"></td>
+                                                    <td id="extractEmail"></td>
                                                 </tr>
                                                 <tr>
                                                     <td><strong>Phone</strong></td>
-                                                    <td id="phone"></td>
+                                                    <td id="extractPhone"></td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>LinkedIn</strong></td>
+                                                    <td id="extractLinkedin"></td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Location</strong></td>
+                                                    <td id="extractLocation"></td>
                                                 </tr>
                                             </table>
                                             
                                             <h5>Skills</h5>
-                                            <div id="skills" class="skills-list"></div>
+                                            <div id="extractSkills" class="skills-list"></div>
                                         </div>
                                         <div class="col-md-6">
                                             <h5>Education</h5>
-                                            <div id="education" class="list-group mb-3"></div>
+                                            <div id="extractEducation" class="list-group mb-3"></div>
                                             
                                             <h5>Experience</h5>
-                                            <div id="experience" class="list-group"></div>
+                                            <div id="extractExperience" class="list-group"></div>
                                         </div>
                                     </div>
                                     
                                     <div class="mt-4">
                                         <h5>Summary</h5>
-                                        <div id="summary" class="p-3 bg-light rounded"></div>
+                                        <div id="extractSummary" class="p-3 bg-light rounded"></div>
                                     </div>
                                     
                                     <div class="mt-4">
-                                        <button class="btn btn-sm btn-outline-secondary" id="showRawText">Show/Hide Raw Text</button>
-                                        <div id="rawTextSection" class="mt-2 d-none">
+                                        <button class="btn btn-sm btn-outline-secondary" id="extractShowRawText">Show/Hide Raw Text</button>
+                                        <div id="extractRawTextSection" class="mt-2 d-none">
                                             <h5>Raw Text Content</h5>
-                                            <pre id="rawText" class="bg-light p-3 rounded text-wrap"></pre>
+                                            <pre id="extractRawText" class="bg-light p-3 rounded text-wrap"></pre>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- History Tab -->
-                            <div class="tab-pane fade" id="history" role="tabpanel" aria-labelledby="history-tab">
-                                <button id="loadHistoryBtn" class="btn btn-primary mb-3">Load Resume History</button>
-                                <div id="historyList" class="list-group">
-                                    <!-- Resume history will be loaded here -->
+                            <!-- Save Resume Tab -->
+                            <div class="tab-pane fade" id="save-resume" role="tabpanel" aria-labelledby="save-resume-tab">
+                                <div class="upload-section text-center p-4">
+                                    <div class="alert alert-warning">
+                                        This option extracts data from a resume AND saves it to the database. Authentication required.
+                                    </div>
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label for="resumeId">Resume ID (optional)</label>
+                                                <input type="text" class="form-control" id="resumeId" placeholder="Enter resume ID">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="form-group">
+                                                <label for="resumeFormat">Format</label>
+                                                <select class="form-control" id="resumeFormat">
+                                                    <option value="standard">Standard</option>
+                                                    <option value="ats">ATS</option>
+                                                    <option value="detailed">Detailed</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="form-group mb-3">
+                                        <label for="resumeUrl">Resume URL (optional)</label>
+                                        <input type="text" class="form-control" id="resumeUrl" placeholder="Enter resume URL">
+                                    </div>
+                                    <div class="dropzone" id="drop-area-save">
+                                        <p>Drag and drop a PDF resume here, or click to select a file</p>
+                                        <input type="file" id="fileUploadSave" accept=".pdf" class="file-input" />
+                                        <div class="mt-3">
+                                            <button id="saveResumeBtn" class="btn btn-primary">Extract and Save Resume</button>
+                                        </div>
+                                    </div>
+                                    <div id="saveProgress" class="progress mt-3 d-none">
+                                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Results Section for Save Resume -->
+                                <div id="saveResultsSection" class="mt-4 d-none">
+                                    <h4 class="border-bottom pb-2">Saved Resume Data</h4>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <h5>Basic Information</h5>
+                                            <table class="table table-bordered">
+                                                <tr>
+                                                    <td><strong>Resume ID</strong></td>
+                                                    <td id="saveResId"></td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>User ID</strong></td>
+                                                    <td id="saveUserId"></td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>Format</strong></td>
+                                                    <td id="saveFormat"></td>
+                                                </tr>
+                                                <tr>
+                                                    <td><strong>URL</strong></td>
+                                                    <td id="saveUrl"></td>
+                                                </tr>
+                                            </table>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <h5>Content (Sample)</h5>
+                                            <div class="alert alert-success">
+                                                <p><strong>Name:</strong> <span id="saveName"></span></p>
+                                                <p><strong>Email:</strong> <span id="saveEmail"></span></p>
+                                                <p><strong>Skills:</strong> <span id="saveSkills"></span></p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-4">
+                                        <button class="btn btn-sm btn-outline-secondary" id="viewFullContent">View/Hide Full Content</button>
+                                        <div id="fullContentSection" class="mt-2 d-none">
+                                            <h5>Full Resume Content</h5>
+                                            <pre id="fullContent" class="bg-light p-3 rounded text-wrap"></pre>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>

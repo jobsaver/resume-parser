@@ -14,7 +14,7 @@ load_dotenv()
 # Import parsers
 from parsers.pdf_extractor import extract_text_from_pdf
 from parsers.resume_parser import parse_resume
-from database import init_db, close_db, save_parsed_resume, get_resume, get_user_resumes, validate_token
+from database import init_db, close_db, validate_token, get_user_resumes
 
 app = Flask(__name__, static_folder='static')
 # Configure CORS to allow all origins and methods for testing
@@ -110,32 +110,19 @@ def authenticate_request():
     
     return user_id, token, None
 
-@app.route('/api/parse', methods=['POST', 'OPTIONS'])
-def parse_resume_endpoint():
-    """Parse a resume and extract structured information"""
+@app.route('/api/extract-only', methods=['POST', 'OPTIONS'])
+def extract_only_endpoint():
+    """Extract resume data without saving to the database and delete the file after extraction"""
     # Handle CORS preflight request
     if request.method == 'OPTIONS':
         return '', 204
         
     # Log request details
-    print("Request received at /api/parse:")
+    print("Request received at /api/extract-only:")
     print(f"Method: {request.method}")
     print(f"Form data: {list(request.form.keys())}")
     print(f"Files: {list(request.files.keys())}")
     print(f"Args: {list(request.args.keys())}")
-    
-    # Authenticate request
-    try:
-        user_id, token, error_response = authenticate_request()
-        if error_response:
-            return error_response
-    except Exception as e:
-        print(f"Authentication error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': f'Authentication error: {str(e)}'
-        }), 500
     
     if 'resume' not in request.files:
         return jsonify({
@@ -167,72 +154,7 @@ def parse_resume_endpoint():
         result = {
             'parsedData': parsed_data,
             'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content,
-            'questionnaireData': {
-                'fullName': parsed_data.get('name', ''),
-                'email': parsed_data.get('email', ''),
-                'phone': parsed_data.get('phone', ''),
-                'linkedIn': parsed_data.get('linkedin', ''),
-                'location': parsed_data.get('location', ''),
-                'websites': parsed_data.get('websites', []),
-                'summary': parsed_data.get('summary', ''),
-                'experience': ', '.join(parsed_data.get('experience', []))[:100] + '...' if len(', '.join(parsed_data.get('experience', []))) > 100 else ', '.join(parsed_data.get('experience', [])),
-                'education': ', '.join(parsed_data.get('education', []))[:100] + '...' if len(', '.join(parsed_data.get('education', []))) > 100 else ', '.join(parsed_data.get('education', [])),
-                'skills': parsed_data.get('skills', []),
-                'industry': parsed_data.get('industry', []),
-                'jobTitles': parsed_data.get('job_titles', []),
-                'yearsOfExperience': parsed_data.get('years_of_experience', ''),
-                'projects': parsed_data.get('projects', []),
-                'certifications': parsed_data.get('certifications', []),
-                'achievements': parsed_data.get('achievements', []),
-                'publications': parsed_data.get('publications', []),
-                'languages': parsed_data.get('languages', []),
-                'volunteer': parsed_data.get('volunteer', [])
-            }
         }
-        
-        # Add dynamically extracted fields if available
-        if 'dynamic_fields' in parsed_data:
-            dynamic_data = parsed_data['dynamic_fields']
-            
-            # Add custom sections from dynamic fields
-            if 'custom_sections' in dynamic_data:
-                result['customSections'] = dynamic_data['custom_sections']
-            
-            # Add key-value pairs
-            if 'key_value_pairs' in dynamic_data:
-                result['additionalFields'] = dynamic_data['key_value_pairs']
-            
-            # Add domain terminology
-            if 'domain_terminology' in dynamic_data:
-                result['questionnaireData']['domainTerminology'] = dynamic_data['domain_terminology']
-            
-            # Add content clusters
-            if 'content_clusters' in dynamic_data:
-                result['contentClusters'] = dynamic_data['content_clusters']
-            
-            # Add named entities from spaCy
-            if 'entities' in dynamic_data:
-                result['namedEntities'] = dynamic_data['entities']
-                
-                # Add organizations to results if available
-                if 'organizations' in dynamic_data['entities']:
-                    result['questionnaireData']['organizations'] = dynamic_data['entities']['organizations']
-            
-            # Add topic modeling results
-            if 'topics' in dynamic_data:
-                result['topicModeling'] = dynamic_data['topics']
-        
-        # Save to database
-        resume_id = save_parsed_resume(
-            user_id=user_id, 
-            token=token,
-            file_name=file.filename,
-            parsed_data=parsed_data,
-            text_content=text_content
-        )
-        
-        # Add the resume ID to the response
-        result['resume_id'] = resume_id
         
         # Remove the temporary file
         temp_file_path.unlink(missing_ok=True)
@@ -253,15 +175,22 @@ def parse_resume_endpoint():
         
         return jsonify({
             'success': False,
-            'error': str(e)
+            'error': f'Error parsing resume: {str(e)}'
         }), 500
 
-@app.route('/api/extract-text', methods=['POST', 'OPTIONS'])
-def extract_text():
-    """Extract plain text from a PDF resume"""
+@app.route('/api/save-resume', methods=['POST', 'OPTIONS'])
+def save_resume_endpoint():
+    """Extract resume data, save to database, and replace if same user ID exists"""
     # Handle CORS preflight request
     if request.method == 'OPTIONS':
         return '', 204
+        
+    # Log request details
+    print("Request received at /api/save-resume:")
+    print(f"Method: {request.method}")
+    print(f"Form data: {list(request.form.keys())}")
+    print(f"Files: {list(request.files.keys())}")
+    print(f"Args: {list(request.args.keys())}")
     
     # Authenticate request
     try:
@@ -275,6 +204,16 @@ def extract_text():
             'success': False,
             'error': f'Authentication error: {str(e)}'
         }), 500
+    
+    # Get resume ID from request
+    resume_id = request.form.get('resume_id')
+    if not resume_id:
+        resume_id = request.args.get('resume_id')
+        
+    # Get format from request
+    resume_format = request.form.get('format', 'standard')
+    if not resume_format:
+        resume_format = request.args.get('format', 'standard')
     
     if 'resume' not in request.files:
         return jsonify({
@@ -299,19 +238,53 @@ def extract_text():
         # Extract text from PDF
         text_content = extract_text_from_pdf(temp_file_path)
         
+        # Parse the resume
+        parsed_data = parse_resume(temp_file_path, text_content)
+        
+        # Get user's existing resumes
+        existing_resumes = get_user_resumes(user_id)
+        
+        # If user already has resumes, delete them (replace with new one)
+        if existing_resumes:
+            from database import delete_user_resumes
+            delete_user_resumes(user_id)
+            
+        # Save to database with the provided resume_id if available
+        resume_url = request.form.get('resume_url', '')
+        
+        # Create document with simplified structure based on requirements
+        document = {
+            "resume_id": resume_id,
+            "user_id": user_id,
+            "content": parsed_data,
+            "url": resume_url,
+            "format": resume_format
+        }
+        
+        # Save the simplified document
+        from database import save_resume_document
+        saved_id = save_resume_document(document)
+        
+        # Create simplified response
+        result = {
+            'resume_id': saved_id,
+            'user_id': user_id,
+            'content': parsed_data,
+            'url': resume_url,
+            'format': resume_format
+        }
+        
         # Remove the temporary file
         temp_file_path.unlink(missing_ok=True)
         
         return jsonify({
             'success': True,
-            'data': {
-                'text': text_content
-            }
+            'data': result
         })
     
     except Exception as e:
         # Log the full error
-        print(f"Error extracting text from PDF: {str(e)}")
+        print(f"Error processing resume: {str(e)}")
         traceback.print_exc()
         
         # Remove the temporary file if it exists
@@ -320,101 +293,7 @@ def extract_text():
         
         return jsonify({
             'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/resume/<resume_id>', methods=['GET', 'OPTIONS'])
-def get_resume_endpoint(resume_id):
-    """Retrieve a resume by ID"""
-    # Handle CORS preflight request
-    if request.method == 'OPTIONS':
-        return '', 204
-    
-    # Authenticate request
-    try:
-        user_id, token, error_response = authenticate_request()
-        if error_response:
-            return error_response
-    except Exception as e:
-        print(f"Authentication error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': f'Authentication error: {str(e)}'
-        }), 500
-    
-    try:
-        # Get resume from database
-        resume = get_resume(resume_id)
-        
-        if not resume:
-            return jsonify({
-                'success': False,
-                'error': 'Resume not found'
-            }), 404
-        
-        # Check if the resume belongs to the authenticated user
-        if resume.get('user_id') != user_id:
-            return jsonify({
-                'success': False,
-                'error': 'Unauthorized access to resume'
-            }), 403
-        
-        return jsonify({
-            'success': True,
-            'data': resume
-        })
-    
-    except Exception as e:
-        # Log the full error
-        print(f"Error retrieving resume: {str(e)}")
-        traceback.print_exc()
-        
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/user/resumes', methods=['GET', 'OPTIONS'])
-def get_user_resumes_endpoint():
-    """Retrieve all resumes for a user"""
-    # Handle CORS preflight request
-    if request.method == 'OPTIONS':
-        return '', 204
-    
-    # Authenticate request
-    try:
-        user_id, token, error_response = authenticate_request()
-        if error_response:
-            return error_response
-    except Exception as e:
-        print(f"Authentication error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': f'Authentication error: {str(e)}'
-        }), 500
-    
-    try:
-        # Get resumes from database
-        resumes = get_user_resumes(user_id)
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'resumes': resumes,
-                'count': len(resumes)
-            }
-        })
-    
-    except Exception as e:
-        # Log the full error
-        print(f"Error retrieving user resumes: {str(e)}")
-        traceback.print_exc()
-        
-        return jsonify({
-            'success': False,
-            'error': str(e)
+            'error': f'Error processing resume: {str(e)}'
         }), 500
 
 if __name__ == '__main__':

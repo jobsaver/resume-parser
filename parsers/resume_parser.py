@@ -66,7 +66,7 @@ def parse_resume(pdf_path, text_content=None):
         text_content (str, optional): Pre-extracted text content
         
     Returns:
-        dict: Structured resume data
+        dict: Structured resume data and raw content
     """
     pdf_path = Path(pdf_path)
     if not pdf_path.exists() and not text_content:
@@ -77,48 +77,18 @@ def parse_resume(pdf_path, text_content=None):
         text_content = ""
         print("No text content provided, using fallback empty string")
     
-    # Manual extraction from text
-    manual_data = extract_from_text(text_content)
+    # Extract only basic information from text
+    data = {}
     
-    # Dynamic field extraction for additional fields not explicitly defined
-    # Only use if text content is substantial
-    if len(text_content) > 200:
-        try:
-            dynamic_fields = extract_dynamic_fields(text_content)
-            if dynamic_fields:
-                manual_data['dynamic_fields'] = dynamic_fields
-        except Exception as e:
-            print(f"Warning: Dynamic field extraction failed: {str(e)}")
-    
-    # Clean up the data
-    result = clean_parsed_data(manual_data)
-    
-    return result
-
-def extract_from_text(text):
-    """
-    Extract information from resume text using regex and NLP
-    
-    Args:
-        text (str): The text content of the resume
-        
-    Returns:
-        dict: Extracted information
-    """
-    if not text:
-        return {}
-    
-    result = {}
-    
-    # Extract name (usually at the top)
+    # Extract name
     name_pattern = r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)'
-    name_match = re.search(name_pattern, text.strip())
+    name_match = re.search(name_pattern, text_content.strip())
     if name_match:
-        result['name'] = name_match.group(1).strip()
+        data['name'] = name_match.group(1).strip()
     else:
         # Try to extract name using NLTK NER
         try:
-            first_paragraph = text.split('\n\n')[0]
+            first_paragraph = text_content.split('\n\n')[0]
             tokens = word_tokenize(first_paragraph)
             tagged = pos_tag(tokens)
             entities = ne_chunk(tagged)
@@ -129,246 +99,77 @@ def extract_from_text(text):
                     names.append(' '.join(c[0] for c in chunk))
             
             if names:
-                result['name'] = names[0]
+                data['name'] = names[0]
         except Exception as e:
             print(f"Name extraction failed: {str(e)}")
     
     # Extract email
     email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-    email_match = re.search(email_pattern, text)
+    email_match = re.search(email_pattern, text_content)
     if email_match:
-        result['email'] = email_match.group(0)
+        data['email'] = email_match.group(0)
     
-    # Extract phone number (improved pattern for international formats)
+    # Extract phone number
     phone_pattern = r'(?:\+\d{1,3}[-\.\s]?)?\(?\d{3}\)?[-\.\s]?\d{3}[-\.\s]?\d{4}|\b\d{3}[-\.\s]?\d{3}[-\.\s]?\d{4}\b'
-    phone_match = re.search(phone_pattern, text)
+    phone_match = re.search(phone_pattern, text_content)
     if phone_match:
-        result['phone'] = phone_match.group(0)
+        data['phone'] = phone_match.group(0)
     
-    # Extract LinkedIn profile
-    linkedin_pattern = r'(?:linkedin\.com/in/|linkedin\.com/profile/view\?id=|linkedin\.com/pub/)([a-zA-Z0-9_-]+)'
-    linkedin_match = re.search(linkedin_pattern, text, re.IGNORECASE)
-    if linkedin_match:
-        result['linkedin'] = "linkedin.com/in/" + linkedin_match.group(1)
-    
-    # Extract websites/portfolio
-    website_pattern = r'(?:https?://)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z0-9-]+\.[a-zA-Z]{2,}|[a-zA-Z0-9-]+\.[a-zA-Z]{2,})(?:/\S*)?'
-    website_matches = re.finditer(website_pattern, text)
-    websites = []
-    for match in website_matches:
-        site = match.group(0)
-        # Exclude email domains and linkedin
-        if '@' not in site and 'linkedin.com' not in site:
-            websites.append(site)
-    if websites:
-        result['websites'] = websites[:3]  # Limit to first 3 websites
-    
-    # Extract location/address
-    address_pattern = r'\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*,\s+[A-Z]{2})\b'
-    address_match = re.search(address_pattern, text)
-    if address_match:
-        result['location'] = address_match.group(0)
-    
-    # Extract skills using keyword matching
+    # Extract skills using spaCy if available
     skills = []
-    
-    # Common programming languages and technologies
-    tech_skills = [
-        # Programming Languages
-        "Python", "Java", "JavaScript", "TypeScript", "C++", "C#", "PHP", "Ruby", "Swift", "Go", "Rust", "Kotlin",
-        "Scala", "R", "Matlab", "Perl", "Shell", "Bash", "PowerShell", "Assembly", "Fortran", "COBOL", "Lisp", "Haskell",
-        
-        # Web Development
-        "React", "Angular", "Vue", "Node.js", "Django", "Flask", "Spring", "Express", "ASP.NET", "Ruby on Rails",
-        "Laravel", "Symfony", "jQuery", "Redux", "Next.js", "Gatsby", "REST API", "GraphQL", "WebSockets",
-        "HTML", "CSS", "SASS", "LESS", "Bootstrap", "Tailwind", "Material UI", "Chakra UI", "Semantic UI",
-        
-        # Databases
-        "SQL", "NoSQL", "MongoDB", "MySQL", "PostgreSQL", "Oracle", "SQLite", "Firebase", "DynamoDB", "Cassandra",
-        "Redis", "Elasticsearch", "Couchbase", "MariaDB", "Neo4j", "GraphDB", "MS SQL Server",
-        
-        # Cloud & DevOps
-        "AWS", "Azure", "GCP", "Docker", "Kubernetes", "CI/CD", "Jenkins", "Travis CI", "CircleCI", "GitHub Actions",
-        "Terraform", "Ansible", "Puppet", "Chef", "Nginx", "Apache", "Load Balancing", "Serverless", "Lambda",
-        "Microservices", "ECS", "EKS", "EC2", "S3", "CloudFront", "IAM", "VPC", "Heroku", "DigitalOcean",
-        
-        # Data Science & AI
-        "TensorFlow", "PyTorch", "Scikit-learn", "Pandas", "NumPy", "Data Science", "SciPy", "Keras", "NLTK", "spaCy",
-        "Machine Learning", "AI", "NLP", "Computer Vision", "Deep Learning", "Data Mining", "Big Data", "Spark",
-        "Hadoop", "ETL", "Data Warehousing", "Data Modeling", "Statistical Analysis", "Regression", "Classification",
-        "Clustering", "Neural Networks", "Reinforcement Learning", "Genetic Algorithms", "OpenCV",
-        
-        # Mobile Development
-        "iOS", "Android", "React Native", "Flutter", "Xamarin", "Swift UI", "Kotlin", "Jetpack Compose", "Mobile App",
-        "Objective-C", "ARKit", "CoreML", "Push Notifications", "Mobile UI/UX",
-        
-        # Testing & QA
-        "JUnit", "TestNG", "Selenium", "Cypress", "Jest", "Mocha", "Chai", "Pytest", "RSpec", "Test Automation",
-        "TDD", "BDD", "Unit Testing", "Integration Testing", "E2E Testing", "Load Testing", "Performance Testing",
-        "Postman", "Quality Assurance"
-    ]
-    
-    # Business skills for all industries
-    business_skills = [
-        # Project Management
-        "Project Management", "Agile", "Scrum", "Kanban", "Waterfall", "JIRA", "Confluence", "Trello", "Asana",
-        "MS Project", "PMP", "PRINCE2", "Six Sigma", "Lean", "Sprint Planning", "Backlog Grooming", "Stand-ups",
-        
-        # Business/Management
-        "Leadership", "Team Management", "Strategic Planning", "Business Analysis", "Product Management",
-        "Operations Management", "Supply Chain", "Procurement", "Logistics", "Change Management",
-        "Risk Management", "Stakeholder Management", "Budget Management", "Forecasting", "KPI",
-        "Performance Management", "Team Building", "Mentoring", "Coaching", "Delegation", "Process Improvement",
-        
-        # Finance/Accounting
-        "Financial Analysis", "Accounting", "Budgeting", "Cost Analysis", "Financial Reporting", "Financial Modeling",
-        "Forecasting", "Revenue Management", "P&L", "Balance Sheet", "Cash Flow", "ROI Analysis", "QuickBooks",
-        "SAP", "Oracle Financials", "Excel", "Financial Planning", "Tax", "Audit", "CPA", "GAAP", "IFRS",
-        
-        # Marketing/Sales
-        "Digital Marketing", "SEO", "SEM", "Content Marketing", "Social Media Marketing", "Email Marketing",
-        "Marketing Strategy", "Brand Management", "Market Research", "Customer Acquisition", "CRM", "Salesforce",
-        "HubSpot", "Google Analytics", "Google Ads", "Facebook Ads", "Marketing Automation", "Sales Management",
-        "Business Development", "Account Management", "Customer Success", "Lead Generation", "Negotiation",
-        
-        # Healthcare
-        "Electronic Health Records", "EHR", "EMR", "Epic", "Cerner", "HIPAA", "Patient Care", "Clinical Documentation",
-        "Medical Coding", "Medical Billing", "Clinical Research", "Pharmaceuticals", "Telemedicine", "Healthcare Administration",
-        
-        # Legal
-        "Contract Law", "Compliance", "Regulatory Affairs", "GDPR", "Intellectual Property", "Legal Research",
-        "Case Management", "Due Diligence", "Corporate Law", "Litigation", "Arbitration", "Legal Writing",
-        
-        # Human Resources
-        "HR Management", "Talent Acquisition", "Recruiting", "Onboarding", "Employee Relations", "Compensation",
-        "Benefits Administration", "Performance Reviews", "HRIS", "Workday", "ADP", "Payroll", "HR Compliance",
-        "Diversity & Inclusion", "Workforce Planning", "Employee Engagement", "Training & Development", "Succession Planning",
-        
-        # Design & Creative
-        "UX/UI Design", "Graphic Design", "Adobe Creative Suite", "Photoshop", "Illustrator", "InDesign", "Figma", "Sketch",
-        "Wireframing", "Prototyping", "User Research", "User Testing", "Visual Design", "Brand Identity", "Typography",
-        "Color Theory", "Animation", "Video Editing", "3D Modeling", "Motion Graphics", "Web Design", "Responsive Design",
-        
-        # Education
-        "Curriculum Development", "Instructional Design", "E-Learning", "LMS", "Teaching", "Training", "Assessment",
-        "Educational Technology", "Student Engagement", "Learning Outcomes", "Course Management", "Blackboard", "Canvas",
-        
-        # Communication
-        "Written Communication", "Verbal Communication", "Presentation Skills", "Public Speaking", "Technical Writing",
-        "Report Writing", "Business Writing", "Copywriting", "Content Creation", "Editing", "Proofreading", "Storytelling",
-        "Cross-functional Communication", "Client Communication", "Executive Communication"
-    ]
-    
-    # Industry-specific skills
-    industry_skills = [
-        # Manufacturing/Engineering
-        "CAD", "AutoCAD", "SolidWorks", "CATIA", "3D Modeling", "Manufacturing Processes", "Quality Control",
-        "Six Sigma", "Lean Manufacturing", "CNC Programming", "GD&T", "PLC", "SCADA", "Industrial Automation",
-        "Process Engineering", "Manufacturing Engineering", "Mechanical Engineering", "Electrical Engineering",
-        "Civil Engineering", "Chemical Engineering", "Industrial Engineering", "Systems Engineering", "IoT",
-        "Robotics", "PCB Design", "Circuit Design", "HVAC", "Welding", "Machining", "ISO 9001",
-        
-        # Finance/Banking
-        "Investment Banking", "Portfolio Management", "Asset Management", "Wealth Management", "Risk Assessment",
-        "Derivatives", "Fixed Income", "Equities", "Financial Regulations", "AML", "KYC", "Bloomberg Terminal",
-        "CFA", "Financial Modeling", "Valuation", "M&A", "Private Equity", "Venture Capital", "Hedge Funds",
-        "Credit Analysis", "Underwriting", "Mortgage Lending", "Retail Banking", "Commercial Banking",
-        
-        # Healthcare/Medical
-        "Patient Care", "Clinical Trials", "Nursing", "Physician", "Medical Devices", "Biotechnology", "Pharmacology",
-        "Healthcare Compliance", "Medical Research", "Public Health", "Epidemiology", "Radiology", "Surgery",
-        "Mental Health", "Physical Therapy", "Occupational Therapy", "Speech Therapy", "Telehealth",
-        
-        # Retail/Consumer
-        "Merchandising", "Inventory Management", "POS Systems", "Retail Operations", "E-commerce", "Omnichannel",
-        "Category Management", "Pricing Strategy", "Vendor Management", "Customer Experience", "Visual Merchandising",
-        "Retail Analytics", "Forecasting", "Demand Planning", "Consumer Insights", "Brand Development",
-        
-        # Energy/Utilities
-        "Renewable Energy", "Solar", "Wind", "Hydroelectric", "Oil & Gas", "Petroleum Engineering", "Power Generation",
-        "Transmission", "Distribution", "Energy Efficiency", "Smart Grid", "Utility Regulations", "Energy Trading",
-        "Environmental Compliance", "Sustainability", "Carbon Footprint", "Energy Modeling", "LEED", "Green Building",
-        
-        # Government/Public Sector
-        "Public Policy", "Public Administration", "Government Contracting", "Grant Management", "Legislative Process",
-        "Regulatory Compliance", "Policy Analysis", "Foreign Affairs", "Diplomacy", "National Security",
-        "Defense", "Intelligence Analysis", "Emergency Management", "Disaster Recovery", "Urban Planning"
-    ]
-    
-    # Combine all skills lists
-    all_skills = tech_skills + business_skills + industry_skills
-    
-    # Find skills in the resume text
-    for skill in all_skills:
-        if re.search(r'\b' + re.escape(skill) + r'\b', text, re.IGNORECASE):
-            skills.append(skill)
-    
-    result['skills'] = list(set(skills))
-    
-    # Identify industry from text
-    industries = [
-        "Technology", "Software", "IT", "Financial Services", "Banking", "Insurance", "Healthcare", 
-        "Medical", "Pharmaceutical", "Manufacturing", "Engineering", "Construction", "Retail", 
-        "E-commerce", "Consulting", "Professional Services", "Education", "Government", 
-        "Non-profit", "Media", "Entertainment", "Telecommunications", "Energy", "Oil & Gas", 
-        "Transportation", "Logistics", "Hospitality", "Food & Beverage", "Real Estate", 
-        "Agriculture", "Automotive"
-    ]
-    
-    identified_industries = []
-    for industry in industries:
-        if re.search(r'\b' + re.escape(industry) + r'\b', text, re.IGNORECASE):
-            identified_industries.append(industry)
-    
-    if identified_industries:
-        result['industry'] = identified_industries
-    
-    # Extract dates for timeline analysis
-    date_pattern = r'\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}\s*[-–—]?\s*(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}|((Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{4}\s*[-–—]?\s*Present|Current)\b'
-    date_matches = re.finditer(date_pattern, text, re.IGNORECASE)
-    date_entries = [match.group(0) for match in date_matches]
-    if date_entries:
-        result['timeline'] = date_entries
-    
-    # Extract years of experience
-    exp_pattern = r'(\d+)\+?\s*years?\s*(of)?\s*experience'
-    exp_match = re.search(exp_pattern, text, re.IGNORECASE)
-    if exp_match:
+    if 'SPACY_AVAILABLE' in globals() and SPACY_AVAILABLE:
         try:
-            result['years_of_experience'] = int(exp_match.group(1))
-        except:
-            pass
+            doc = nlp(text_content)
+            
+            # Extract noun phrases as potential skills
+            for chunk in doc.noun_chunks:
+                # Filter out common non-skill noun phrases (like "I", "me", etc.)
+                if len(chunk.text.strip()) > 2 and not chunk.text.lower() in ['i', 'me', 'my', 'mine', 'myself', 'we', 'us', 'our']:
+                    skills.append(chunk.text.strip())
+            
+            # Extract technical terms (proper nouns and nouns that could be skills)
+            for token in doc:
+                if token.pos_ in ['NOUN', 'PROPN'] and len(token.text) > 2:
+                    if token.text.strip() not in skills and not token.text.lower() in ['i', 'me', 'my', 'mine', 'myself', 'we', 'us', 'our']:
+                        skills.append(token.text.strip())
+            
+            # Clean and deduplicate skills
+            cleaned_skills = []
+            for skill in skills:
+                # Normalize skill text
+                clean_skill = re.sub(r'\s+', ' ', skill).strip()
+                if clean_skill and clean_skill.lower() not in [s.lower() for s in cleaned_skills]:
+                    cleaned_skills.append(clean_skill)
+            
+            data['skills'] = cleaned_skills
+        except Exception as e:
+            print(f"spaCy skill extraction failed: {str(e)}")
     
-    # Extract job titles
-    job_titles = [
-        "Software Engineer", "Product Manager", "Project Manager", "Data Scientist", "Data Analyst",
-        "Business Analyst", "Financial Analyst", "Marketing Manager", "Sales Manager", "Operations Manager",
-        "CEO", "CTO", "CFO", "CIO", "COO", "Director", "VP", "Vice President", "Senior", "Junior",
-        "Lead", "Head", "Chief", "Manager", "Supervisor", "Coordinator", "Specialist", "Consultant",
-        "Analyst", "Engineer", "Developer", "Designer", "Architect", "Administrator", "Technician"
-    ]
+    # If spaCy is not available, use regex to find skills
+    if 'skills' not in data or not data['skills']:
+        # Look for skills based on linguistic patterns
+        skills_pattern = r'(?:proficient in|experienced with|knowledge of|skilled in|expertise in|familiar with|competent in)\s+((?:[A-Za-z0-9#+.\-]+(?:\s+and\s+|\s*,\s*|\s+)?)+)'
+        skills_matches = re.finditer(skills_pattern, text_content, re.IGNORECASE)
+        
+        # Extract skills from matches
+        all_skills = []
+        for match in skills_matches:
+            skill_text = match.group(1).strip()
+            # Split by common separators
+            for skill in re.split(r'\s*(?:,|\band\b)\s*', skill_text):
+                if skill and len(skill) > 2:  # Avoid very short "skills"
+                    all_skills.append(skill.strip())
+        
+        data['skills'] = list(set(all_skills))
     
-    found_titles = []
-    for title in job_titles:
-        if re.search(r'\b' + re.escape(title) + r'\b', text, re.IGNORECASE):
-            # Get the complete job title (including words before and after)
-            matches = re.finditer(r'([A-Z][a-z]+\s+)*\b' + re.escape(title) + r'\b(\s+[A-Z][a-z]+)*', text)
-            for match in matches:
-                found_titles.append(match.group(0).strip())
-    
-    if found_titles:
-        result['job_titles'] = list(set(found_titles))
-    
-    # Extract sections
+    # Extract education, experience and certifications sections
     sections = {}
     section_headers = [
-        "education", "experience", "work experience", "employment", "skills", 
-        "projects", "certifications", "achievements", "awards", "publications",
-        "summary", "objective", "professional summary", "profile", "about",
-        "languages", "volunteer", "interests", "activities", "references"
+        "education", "experience", "work experience", "employment", 
+        "certifications", "certification", "certificates"
     ]
     
-    lines = text.split('\n')
+    lines = text_content.split('\n')
     current_section = None
     for line in lines:
         # Check if this line is a section header
@@ -383,51 +184,35 @@ def extract_from_text(text):
             sections[current_section].append(line.strip())
     
     # Process sections
-    if 'summary' in sections or 'profile' in sections or 'about' in sections or 'objective' in sections or 'professional summary' in sections:
-        key = next((k for k in ['summary', 'profile', 'about', 'objective', 'professional summary'] if k in sections), None)
-        if key:
-            result['summary'] = ' '.join(sections[key])
-    
     if 'education' in sections:
-        result['education'] = sections['education']
+        data['education'] = sections['education']
     
     if any(exp in sections for exp in ['experience', 'work experience', 'employment']):
-        exp_key = next(k for k in ['experience', 'work experience', 'employment'] if k in sections)
-        result['experience'] = sections[exp_key]
+        exp_key = next((k for k in ['experience', 'work experience', 'employment'] if k in sections), None)
+        if exp_key:
+            data['experience'] = sections[exp_key]
     
-    if 'projects' in sections:
-        result['projects'] = sections['projects']
-    
-    if 'certifications' in sections:
-        result['certifications'] = sections['certifications']
-    
-    if 'achievements' in sections or 'awards' in sections:
-        key = next((k for k in ['achievements', 'awards'] if k in sections), None)
-        if key:
-            result['achievements'] = sections[key]
-    
-    if 'publications' in sections:
-        result['publications'] = sections['publications']
-    
-    if 'languages' in sections:
-        result['languages'] = sections['languages']
-    
-    if 'volunteer' in sections:
-        result['volunteer'] = sections['volunteer']
+    if any(cert in sections for cert in ['certifications', 'certification', 'certificates']):
+        cert_key = next((k for k in ['certifications', 'certification', 'certificates'] if k in sections), None)
+        if cert_key:
+            data['certifications'] = sections[cert_key]
     
     # Clean all text sections
-    for key in result:
-        if isinstance(result[key], list) and all(isinstance(item, str) for item in result[key]):
+    for key in data:
+        if isinstance(data[key], list) and all(isinstance(item, str) for item in data[key]):
             # Clean each item in the list
             cleaned_list = []
-            for item in result[key]:
+            for item in data[key]:
                 # Remove unnecessary spaces
                 cleaned_item = re.sub(r'\s+', ' ', item).strip()
                 if cleaned_item:
                     cleaned_list.append(cleaned_item)
-            result[key] = cleaned_list
+            data[key] = cleaned_list
     
-    return result
+    # Add raw content to the response
+    data['raw_content'] = text_content
+    
+    return data
 
 def clean_parsed_data(data):
     """

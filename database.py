@@ -70,81 +70,6 @@ def close_db():
         client.close()
         print("MongoDB connection closed")
 
-def save_parsed_resume(user_id, token, file_name, parsed_data, text_content):
-    """
-    Save parsed resume data to MongoDB
-    
-    Args:
-        user_id (str): The user ID who uploaded the resume
-        token (str): Authentication token
-        file_name (str): Original file name
-        parsed_data (dict): The structured data extracted from the resume
-        text_content (str): The raw text content of the resume
-        
-    Returns:
-        str: The ID of the saved document
-    """
-    global db
-    if db is None:
-        if not init_db():
-            return None
-    
-    try:
-        collection = db.resumes
-        
-        # Create document
-        document = {
-            "user_id": user_id,
-            "file_name": file_name,
-            "parsed_data": parsed_data,
-            "text_content": text_content,
-            "created_at": datetime.datetime.utcnow(),
-            "updated_at": datetime.datetime.utcnow()
-        }
-        
-        # Insert document
-        result = collection.insert_one(document)
-        resume_id = str(result.inserted_id)
-        
-        print(f"Resume saved to database with ID: {resume_id}")
-        return resume_id
-        
-    except Exception as e:
-        print(f"Error saving resume to database: {str(e)}")
-        return None
-
-def get_resume(resume_id):
-    """
-    Retrieve a resume from the database by ID
-    
-    Args:
-        resume_id (str): The ID of the resume to retrieve
-        
-    Returns:
-        dict: The resume document, or None if not found
-    """
-    global db
-    if db is None:
-        if not init_db():
-            return None
-    
-    try:
-        collection = db.resumes
-        
-        # Find document
-        resume = collection.find_one({"_id": ObjectId(resume_id)})
-        
-        if resume:
-            # Convert ObjectId to string for JSON serialization
-            resume["_id"] = str(resume["_id"])
-            return resume
-        
-        return None
-        
-    except Exception as e:
-        print(f"Error retrieving resume from database: {str(e)}")
-        return None
-
 def get_user_resumes(user_id):
     """
     Retrieve all resumes for a specific user
@@ -175,6 +100,73 @@ def get_user_resumes(user_id):
     except Exception as e:
         print(f"Error retrieving user resumes from database: {str(e)}")
         return []
+
+def delete_user_resumes(user_id):
+    """
+    Delete all resumes for a specific user
+    
+    Args:
+        user_id (str): The user ID
+        
+    Returns:
+        int: Number of deleted documents
+    """
+    global db
+    if db is None:
+        if not init_db():
+            return 0
+    
+    try:
+        collection = db.resumes
+        
+        # Delete documents
+        result = collection.delete_many({"user_id": user_id})
+        deleted_count = result.deleted_count
+        
+        print(f"Deleted {deleted_count} resumes for user: {user_id}")
+        return deleted_count
+        
+    except Exception as e:
+        print(f"Error deleting user resumes from database: {str(e)}")
+        return 0
+
+def save_resume_document(document):
+    """
+    Save resume document with simplified structure
+    
+    Args:
+        document (dict): The document to save with the following keys:
+            - resume_id: Optional resume ID
+            - user_id: User ID
+            - content: Parsed resume data
+            - url: Resume URL
+            - format: Resume format
+        
+    Returns:
+        str: The ID of the saved document
+    """
+    global db
+    if db is None:
+        if not init_db():
+            return None
+    
+    try:
+        collection = db.resumes
+        
+        # Add timestamps
+        document["created_at"] = datetime.datetime.utcnow()
+        document["updated_at"] = datetime.datetime.utcnow()
+        
+        # Insert document
+        result = collection.insert_one(document)
+        resume_id = str(result.inserted_id)
+        
+        print(f"Resume document saved to database with ID: {resume_id}")
+        return resume_id
+        
+    except Exception as e:
+        print(f"Error saving resume document to database: {str(e)}")
+        return None
 
 def validate_token(user_id, token):
     """
