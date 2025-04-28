@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Resume</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px 0;
+            text-align: center;
+        }
+        h1 {
+            margin: 0;
+        }
+        .resume-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .resume-frame {
+            width: 100%;
+            height: 800px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: white;
+        }
+        .actions {
+            margin-top: 20px;
+            text-align: center;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 400px;
+            font-size: 18px;
+            color: #666;
+        }
+        .error {
+            color: #e74c3c;
+            text-align: center;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #fadbd8;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Your Resume</h1>
+        </div>
+    </header>
+
+    <div class="container">
+        <div id="loading" class="loading">Loading resume...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="resume-container" class="resume-container" style="display: none;">
+            <iframe id="resume-frame" class="resume-frame" src="about:blank"></iframe>
+            <div class="actions">
+                <button id="download-btn">Download PDF</button>
+                <button id="edit-btn">Edit Resume</button>
+                <button id="back-btn">Back to Home</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Get resume ID from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const resumeId = urlParams.get('id');
+            
+            if (!resumeId) {
+                showError('No resume ID provided');
+                return;
+            }
+            
+            // For testing, use hardcoded values
+            const userId = 'test_user';
+            const token = 'b23ebd32uiedb3uibd3';
+            
+            // Fetch resume data
+            fetch(`/api/download-resume/${resumeId}?user_id=${userId}&token=${token}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Display the resume
+                        const resumeFrame = document.getElementById('resume-frame');
+                        resumeFrame.src = data.data.file_url;
+                        
+                        // Hide loading, show resume
+                        document.getElementById('loading').style.display = 'none';
+                        document.getElementById('resume-container').style.display = 'block';
+                        
+                        // Set up download button
+                        document.getElementById('download-btn').addEventListener('click', function() {
+                            window.open(data.data.file_url, '_blank');
+                        });
+                        
+                        // Set up edit button
+                        document.getElementById('edit-btn').addEventListener('click', function() {
+                            window.location.href = `/resume-maker.html?id=${resumeId}`;
+                        });
+                        
+                        // Set up back button
+                        document.getElementById('back-btn').addEventListener('click', function() {
+                            window.location.href = '/';
+                        });
+                    } else {
+                        showError(data.error || 'Failed to load resume');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    showError('An error occurred while loading your resume');
+                });
+                
+            function showError(message) {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').textContent = message;
+                document.getElementById('error').style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html> 

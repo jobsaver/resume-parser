@@ -2,7 +2,7 @@ import os
 import json
 import tempfile
 from pathlib import Path
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 import traceback
@@ -16,8 +16,9 @@ load_dotenv()
 # Import parsers
 from parsers.pdf_extractor import extract_text_from_pdf
 from parsers.resume_parser import parse_resume
-from database import init_db, close_db, validate_token, get_user_resumes
+from database import init_db, close_db, validate_token, get_user_resumes, save_resume_document
 from storage import upload_file_to_spaces, generate_spaces_key, delete_file_from_spaces
+from rendercv_integration import create_resume_from_data, get_available_themes
 
 app = Flask(__name__, static_folder='static')
 # Configure CORS to allow all origins and methods for testing
@@ -42,6 +43,12 @@ atexit.register(close_db)
 def serve_frontend():
     """Serve the frontend HTML page"""
     return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/resume-maker')
+@app.route('/resume-maker.html')
+def serve_resume_maker():
+    """Serve the resume maker HTML page"""
+    return send_from_directory(app.static_folder, 'resume-maker.html')
 
 @app.route('/css/<path:filename>')
 def serve_css(filename):
@@ -327,6 +334,189 @@ def save_resume_endpoint():
         return jsonify({
             'success': False,
             'error': f'Error processing resume: {str(e)}'
+        }), 500
+
+@app.route('/api/themes', methods=['GET'])
+def get_themes():
+    """Get available RenderCV themes"""
+    try:
+        themes = get_available_themes()
+        return jsonify({
+            'success': True,
+            'data': themes
+        })
+    except Exception as e:
+        print(f"Error getting themes: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Error getting themes: {str(e)}'
+        }), 500
+
+@app.route('/api/create-resume', methods=['POST', 'OPTIONS'])
+def create_resume_endpoint():
+    """Create a resume using RenderCV"""
+    # Handle CORS preflight request
+    if request.method == 'OPTIONS':
+        return '', 204
+        
+    # Log request details
+    print("Request received at /api/create-resume:")
+    print(f"Method: {request.method}")
+    print(f"Form data: {list(request.form.keys())}")
+    print(f"Files: {list(request.files.keys())}")
+    print(f"Args: {list(request.args.keys())}")
+    
+    # Authenticate request
+    try:
+        user_id, token, error_response = authenticate_request()
+        if error_response:
+            return error_response
+    except Exception as e:
+        print(f"Authentication error: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Authentication error: {str(e)}'
+        }), 500
+    
+    # Get resume data from request
+    if 'resume_data' not in request.form:
+        return jsonify({
+            'success': False,
+            'error': 'No resume data provided'
+        }), 400
+    
+    try:
+        # Parse resume data
+        resume_data = json.loads(request.form['resume_data'])
+        
+        # Get theme from request (optional, default to classic)
+        theme = request.form.get('theme', 'classic')
+        
+        # Create resume using RenderCV
+        success, result = create_resume_from_data(resume_data, theme)
+        
+        if not success:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Unknown error creating resume')
+            }), 500
+        
+        # Upload the generated PDF to DigitalOcean Spaces
+        pdf_path = result['pdf_path']
+        resume_id = result['resume_id']
+        spaces_key = generate_spaces_key(user_id, resume_id, f"{resume_id}.pdf")
+        
+        upload_success, spaces_result = upload_file_to_spaces(pdf_path, spaces_key, 'application/pdf')
+        
+        if not upload_success:
+            return jsonify({
+                'success': False,
+                'error': f'Error uploading file to DigitalOcean Spaces: {spaces_result}'
+            }), 500
+            
+        # Store the file URL
+        file_url = spaces_result
+        
+        # Create document with simplified structure
+        document = {
+            "resume_id": resume_id,
+            "user_id": user_id,
+            "content": resume_data,
+            "url": file_url,
+            "format": "rendercv",
+            "theme": theme
+        }
+        
+        # Save the document
+        saved_id = save_resume_document(document)
+        
+        # Create simplified response
+        response_result = {
+            'resume_id': saved_id,
+            'user_id': user_id,
+            'content': resume_data,
+            'format': 'rendercv',
+            'theme': theme,
+            'file_url': file_url
+        }
+        
+        return jsonify({
+            'success': True,
+            'data': response_result
+        })
+        
+    except Exception as e:
+        # Log the full error
+        print(f"Error creating resume: {str(e)}")
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': f'Error creating resume: {str(e)}'
+        }), 500
+
+@app.route('/api/download-resume/<resume_id>', methods=['GET'])
+def download_resume_endpoint(resume_id):
+    """Download a resume PDF"""
+    # Authenticate request
+    try:
+        user_id, token, error_response = authenticate_request()
+        if error_response:
+            return error_response
+    except Exception as e:
+        print(f"Authentication error: {str(e)}")
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': f'Authentication error: {str(e)}'
+        }), 500
+    
+    try:
+        # Get user's resumes
+        resumes = get_user_resumes(user_id)
+        
+        # Find the resume with the given ID
+        resume = None
+        for r in resumes:
+            if r.get('resume_id') == resume_id:
+                resume = r
+                break
+        
+        if not resume:
+            return jsonify({
+                'success': False,
+                'error': f'Resume with ID {resume_id} not found'
+            }), 404
+        
+        # Get the file URL
+        file_url = resume.get('url')
+        
+        if not file_url:
+            return jsonify({
+                'success': False,
+                'error': f'No file URL found for resume with ID {resume_id}'
+            }), 404
+        
+        # Download the file from DigitalOcean Spaces
+        # This is a simplified version - in a real implementation, you would
+        # download the file from DigitalOcean Spaces and serve it to the client
+        return jsonify({
+            'success': True,
+            'data': {
+                'file_url': file_url
+            }
+        })
+        
+    except Exception as e:
+        # Log the full error
+        print(f"Error downloading resume: {str(e)}")
+        traceback.print_exc()
+        
+        return jsonify({
+            'success': False,
+            'error': f'Error downloading resume: {str(e)}'
         }), 500
 
 if __name__ == '__main__':
