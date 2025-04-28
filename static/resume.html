@@ -70,31 +70,194 @@
             background-color: #fadbd8;
             border-radius: 5px;
         }
+        .resume-type-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 10px;
+            background-color: #3498db;
+            color: white;
+        }
+        
+        .resume-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .resume-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .theme-preview {
+            width: 100px;
+            height: 140px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .theme-preview:hover {
+            transform: scale(1.05);
+        }
+        
+        .theme-preview.selected {
+            border-color: #3498db;
+            box-shadow: 0 0 5px rgba(52, 152, 219, 0.5);
+        }
+        
+        .resume-section {
+            margin-bottom: 30px;
+        }
+        
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .section-title {
+            font-size: 1.2em;
+            color: #2c3e50;
+            margin: 0;
+        }
+        
+        .section-content {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .dynamic-field {
+            margin-bottom: 15px;
+        }
+        
+        .field-label {
+            font-weight: bold;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .field-value {
+            color: #333;
+        }
+        
+        .field-value.empty {
+            color: #999;
+            font-style: italic;
+        }
+        
+        .resume-preview {
+            background-color: white;
+            padding: 40px;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            margin-top: 20px;
+        }
+        
+        .preview-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        .preview-options {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .preview-option {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
     <header>
         <div class="container">
-            <h1>Your Resume</h1>
+            <h1>Your Resume <span id="resume-type-badge" class="resume-type-badge"></span></h1>
         </div>
     </header>
 
     <div class="container">
-        <div id="loading" class="loading">Loading resume...</div>
+        <div id="loading" class="loading-overlay">
+            <div class="loading-spinner"></div>
+        </div>
+        
         <div id="error" class="error" style="display: none;"></div>
+        
         <div id="resume-container" class="resume-container" style="display: none;">
-            <iframe id="resume-frame" class="resume-frame" src="about:blank"></iframe>
-            <div class="actions">
-                <button id="download-btn">Download PDF</button>
-                <button id="edit-btn">Edit Resume</button>
-                <button id="back-btn">Back to Home</button>
+            <div class="resume-controls">
+                <div class="preview-options">
+                    <div class="preview-option">
+                        <label for="theme-select">Theme:</label>
+                        <select id="theme-select" class="form-control">
+                            <option value="classic">Classic</option>
+                            <option value="modern">Modern</option>
+                            <option value="minimal">Minimal</option>
+                            <option value="professional">Professional</option>
+                            <option value="creative">Creative</option>
+                        </select>
+                    </div>
+                    <div class="preview-option">
+                        <label for="format-select">Format:</label>
+                        <select id="format-select" class="form-control">
+                            <option value="pdf">PDF</option>
+                            <option value="html">HTML</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="resume-actions">
+                    <button id="edit-btn" class="btn btn-primary">Edit Resume</button>
+                    <button id="download-btn" class="btn btn-success">Download</button>
+                    <button id="share-btn" class="btn btn-info">Share</button>
+                </div>
+            </div>
+
+            <div class="resume-preview">
+                <div id="preview-content"></div>
             </div>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Get resume ID from URL
             const urlParams = new URLSearchParams(window.location.search);
             const resumeId = urlParams.get('id');
             
@@ -112,28 +275,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
-                        // Display the resume
-                        const resumeFrame = document.getElementById('resume-frame');
-                        resumeFrame.src = data.data.file_url;
-                        
-                        // Hide loading, show resume
-                        document.getElementById('loading').style.display = 'none';
-                        document.getElementById('resume-container').style.display = 'block';
-                        
-                        // Set up download button
-                        document.getElementById('download-btn').addEventListener('click', function() {
-                            window.open(data.data.file_url, '_blank');
-                        });
-                        
-                        // Set up edit button
-                        document.getElementById('edit-btn').addEventListener('click', function() {
-                            window.location.href = `/resume-maker.html?id=${resumeId}`;
-                        });
-                        
-                        // Set up back button
-                        document.getElementById('back-btn').addEventListener('click', function() {
-                            window.location.href = '/';
-                        });
+                        initializeResume(data.data);
                     } else {
                         showError(data.error || 'Failed to load resume');
                     }
@@ -143,6 +285,375 @@
                     showError('An error occurred while loading your resume');
                 });
                 
+            function initializeResume(resumeData) {
+                // Set resume type badge
+                const typeBadge = document.getElementById('resume-type-badge');
+                typeBadge.textContent = resumeData.type || 'Professional';
+                
+                // Set initial theme
+                const themeSelect = document.getElementById('theme-select');
+                themeSelect.value = resumeData.theme || 'classic';
+                
+                // Generate preview
+                generatePreview(resumeData);
+                
+                // Set up event listeners
+                setupEventListeners(resumeData);
+                
+                // Hide loading, show resume
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('resume-container').style.display = 'block';
+            }
+            
+            function generatePreview(resumeData) {
+                const previewContent = document.getElementById('preview-content');
+                const theme = document.getElementById('theme-select').value;
+                
+                // Generate HTML based on resume type and theme
+                const html = generateResumeHTML(resumeData, theme);
+                previewContent.innerHTML = html;
+            }
+            
+            function generateResumeHTML(data, theme) {
+                // Theme-specific styles
+                const themeStyles = {
+                    classic: `
+                        body { font-family: 'Times New Roman', serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
+                        h1 { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+                        h2 { border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+                        .section { margin-bottom: 20px; }
+                        .contact-info { text-align: center; margin-bottom: 20px; }
+                        .item { margin-bottom: 15px; }
+                        .item-header { font-weight: bold; }
+                        .item-date { font-style: italic; color: #666; }
+                        .skills-list { display: flex; flex-wrap: wrap; }
+                        .skill-item { margin-right: 10px; }
+                    `,
+                    modern: `
+                        body { font-family: 'Arial', sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; }
+                        h1 { text-align: center; color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+                        h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
+                        .section { margin-bottom: 25px; background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+                        .contact-info { text-align: center; margin-bottom: 20px; color: #7f8c8d; }
+                        .item { margin-bottom: 15px; }
+                        .item-header { font-weight: bold; color: #2c3e50; }
+                        .item-date { font-style: italic; color: #7f8c8d; }
+                        .skills-list { display: flex; flex-wrap: wrap; }
+                        .skill-item { margin-right: 10px; background-color: #3498db; color: white; padding: 3px 8px; border-radius: 3px; margin-bottom: 5px; }
+                    `,
+                    minimal: `
+                        body { font-family: 'Helvetica', sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
+                        h1 { text-align: center; font-weight: 300; }
+                        h2 { font-weight: 300; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+                        .section { margin-bottom: 20px; }
+                        .contact-info { text-align: center; margin-bottom: 20px; color: #666; }
+                        .item { margin-bottom: 15px; }
+                        .item-header { font-weight: 500; }
+                        .item-date { color: #999; }
+                        .skills-list { display: flex; flex-wrap: wrap; }
+                        .skill-item { margin-right: 10px; }
+                    `
+                };
+
+                // Generate HTML based on resume type
+                let html = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="UTF-8">
+                    <title>${data.name} - Resume</title>
+                    <style>
+                        ${themeStyles[theme]}
+                    </style>
+                </head>
+                <body>
+                    <h1>${data.name}</h1>
+                    <div class="contact-info">
+                        ${data.email} | ${data.phone || ''} | ${data.location || ''}
+                    </div>
+                `;
+
+                // Add sections based on resume type
+                if (data.type === 'academic') {
+                    html += generateAcademicSections(data);
+                } else if (data.type === 'creative') {
+                    html += generateCreativeSections(data);
+                } else if (data.type === 'technical') {
+                    html += generateTechnicalSections(data);
+                } else {
+                    html += generateProfessionalSections(data);
+                }
+
+                html += `
+                </body>
+                </html>
+                `;
+
+                return html;
+            }
+
+            function generateProfessionalSections(data) {
+                let html = '';
+                
+                // Education section
+                if (data.education && data.education.length > 0) {
+                    html += `
+                    <div class="section">
+                        <h2>Education</h2>
+                    `;
+                    
+                    data.education.forEach(edu => {
+                        html += `
+                        <div class="item">
+                            <div class="item-header">${edu.school}</div>
+                            <div class="item-date">${edu.start_date} - ${edu.end_date}</div>
+                            <div>${edu.degree} in ${edu.field_of_study}</div>
+                            ${edu.gpa ? `<div>GPA: ${edu.gpa}</div>` : ''}
+                            ${edu.courses && edu.courses.length > 0 ? 
+                                `<div>Courses: ${Array.isArray(edu.courses) ? edu.courses.join(', ') : edu.courses}</div>` : ''}
+                        </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                // Experience section
+                if (data.experience && data.experience.length > 0) {
+                    html += `
+                    <div class="section">
+                        <h2>Experience</h2>
+                    `;
+                    
+                    data.experience.forEach(exp => {
+                        html += `
+                        <div class="item">
+                            <div class="item-header">${exp.company}</div>
+                            <div class="item-date">${exp.start_date} - ${exp.end_date}</div>
+                            <div>${exp.title}</div>
+                            ${exp.responsibilities && exp.responsibilities.length > 0 ? 
+                                `<ul>${exp.responsibilities.map(resp => `<li>${resp}</li>`).join('')}</ul>` : ''}
+                        </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                // Skills section
+                if (data.skills) {
+                    html += `
+                    <div class="section">
+                        <h2>Skills</h2>
+                        <div class="skills-list">
+                    `;
+                    
+                    if (typeof data.skills === 'object') {
+                        for (const [category, skills] of Object.entries(data.skills)) {
+                            html += `
+                            <div class="skill-category">
+                                <h3>${category}</h3>
+                                <div class="skills-list">
+                                    ${Array.isArray(skills) ? skills.map(skill => `<span class="skill-item">${skill}</span>`).join('') : ''}
+                                </div>
+                            </div>
+                            `;
+                        }
+                    } else if (Array.isArray(data.skills)) {
+                        html += data.skills.map(skill => `<span class="skill-item">${skill}</span>`).join('');
+                    }
+                    
+                    html += `
+                        </div>
+                    </div>
+                    `;
+                }
+
+                // Projects section
+                if (data.projects && data.projects.length > 0) {
+                    html += `
+                    <div class="section">
+                        <h2>Projects</h2>
+                    `;
+                    
+                    data.projects.forEach(proj => {
+                        html += `
+                        <div class="item">
+                            <div class="item-header">${proj.name}</div>
+                            <div>${proj.description}</div>
+                            ${proj.technologies && proj.technologies.length > 0 ? 
+                                `<div>Technologies: ${Array.isArray(proj.technologies) ? proj.technologies.join(', ') : proj.technologies}</div>` : ''}
+                        </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                return html;
+            }
+
+            function generateAcademicSections(data) {
+                let html = generateProfessionalSections(data);
+                
+                // Add publications section
+                if (data.publications && data.publications.length > 0) {
+                    html += `
+                    <div class="section">
+                        <h2>Publications</h2>
+                    `;
+                    
+                    data.publications.forEach(pub => {
+                        html += `
+                        <div class="item">
+                            <div class="item-header">${pub.title}</div>
+                            <div class="item-date">${pub.date}</div>
+                            <div>${pub.authors}</div>
+                            <div>${pub.journal}</div>
+                        </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                // Add research section
+                if (data.research && data.research.length > 0) {
+                    html += `
+                    <div class="section">
+                        <h2>Research Experience</h2>
+                    `;
+                    
+                    data.research.forEach(res => {
+                        html += `
+                        <div class="item">
+                            <div class="item-header">${res.title}</div>
+                            <div class="item-date">${res.start_date} - ${res.end_date}</div>
+                            <div>${res.description}</div>
+                        </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                return html;
+            }
+
+            function generateCreativeSections(data) {
+                let html = '';
+                
+                // Portfolio section
+                if (data.portfolio && data.portfolio.length > 0) {
+                    html += `
+                    <div class="section">
+                        <h2>Portfolio</h2>
+                    `;
+                    
+                    data.portfolio.forEach(item => {
+                        html += `
+                        <div class="item">
+                            <div class="item-header">${item.title}</div>
+                            <div class="item-date">${item.date}</div>
+                            <div>${item.description}</div>
+                            ${item.image ? `<img src="${item.image}" alt="${item.title}" style="max-width: 100%;">` : ''}
+                        </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                // Add other sections from professional resume
+                html += generateProfessionalSections(data);
+
+                return html;
+            }
+
+            function generateTechnicalSections(data) {
+                let html = generateProfessionalSections(data);
+                
+                // Add certifications section
+                if (data.certifications && data.certifications.length > 0) {
+                    html += `
+                    <div class="section">
+                        <h2>Certifications</h2>
+                    `;
+                    
+                    data.certifications.forEach(cert => {
+                        html += `
+                        <div class="item">
+                            <div class="item-header">${cert.name}</div>
+                            <div class="item-date">${cert.date}</div>
+                            <div>${cert.issuer}</div>
+                            ${cert.url ? `<a href="${cert.url}" target="_blank">View Certificate</a>` : ''}
+                        </div>
+                        `;
+                    });
+                    
+                    html += `</div>`;
+                }
+
+                return html;
+            }
+
+            function setupEventListeners(resumeData) {
+                // Theme change
+                document.getElementById('theme-select').addEventListener('change', function() {
+                    generatePreview(resumeData);
+                });
+
+                // Format change
+                document.getElementById('format-select').addEventListener('change', function() {
+                    const format = this.value;
+                    const downloadBtn = document.getElementById('download-btn');
+                    downloadBtn.textContent = format === 'pdf' ? 'Download PDF' : 'Download HTML';
+                });
+
+                // Edit button
+                document.getElementById('edit-btn').addEventListener('click', function() {
+                    window.location.href = `/resume-maker.html?id=${resumeId}`;
+                });
+
+                // Download button
+                document.getElementById('download-btn').addEventListener('click', function() {
+                    const format = document.getElementById('format-select').value;
+                    const theme = document.getElementById('theme-select').value;
+                    
+                    // Show loading
+                    document.getElementById('loading').style.display = 'flex';
+                    
+                    // Download resume
+                    fetch(`/api/download-resume/${resumeId}?format=${format}&theme=${theme}&user_id=test_user&token=b23ebd32uiedb3uibd3`)
+                        .then(response => response.blob())
+                        .then(blob => {
+                            // Create download link
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `resume_${resumeId}.${format}`;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                            
+                            // Hide loading
+                            document.getElementById('loading').style.display = 'none';
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            showError('An error occurred while downloading your resume');
+                            document.getElementById('loading').style.display = 'none';
+                        });
+                });
+
+                // Share button
+                document.getElementById('share-btn').addEventListener('click', function() {
+                    // Implement sharing functionality
+                    alert('Sharing functionality will be implemented here');
+                });
+            }
+
             function showError(message) {
                 document.getElementById('loading').style.display = 'none';
                 document.getElementById('error').textContent = message;

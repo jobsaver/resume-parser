@@ -2,7 +2,7 @@ import os
 import json
 import tempfile
 from pathlib import Path
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_from_directory, send_file, render_template
 from flask_cors import CORS
 from dotenv import load_dotenv
 import traceback
@@ -38,6 +38,9 @@ init_db()
 
 # Register function to close database connection on application exit
 atexit.register(close_db)
+
+# Store resumes in memory (use a database in production)
+resumes = {}
 
 @app.route('/')
 def serve_frontend():
@@ -518,6 +521,242 @@ def download_resume_endpoint(resume_id):
             'success': False,
             'error': f'Error downloading resume: {str(e)}'
         }), 500
+
+@app.route('/api/create-resume', methods=['POST'])
+def api_create_resume():
+    try:
+        # Check if data is JSON or form data
+        if request.is_json:
+            data = request.json
+        else:
+            data = request.form.to_dict()
+            if 'resume_data' in data:
+                data['resume_data'] = json.loads(data['resume_data'])
+        
+        resume_data = data.get('resume_data', {})
+        theme = data.get('theme', 'classic')
+        
+        # Generate a unique ID for this resume
+        resume_id = str(uuid.uuid4())
+        
+        # Create the resume using RenderCV
+        success, result = create_resume_from_data(resume_data, theme)
+        
+        if success:
+            # Store the resume data
+            resumes[resume_id] = {
+                'data': resume_data,
+                'theme': theme,
+                'pdf_path': result['pdf_path'],
+                'yaml_path': result['yaml_path']
+            }
+            
+            return jsonify({
+                'success': True,
+                'data': {
+                    'resume_id': resume_id,
+                    'preview_url': f'/api/resume-preview/{resume_id}',
+                    'download_url': f'/api/download-resume/{resume_id}'
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Unknown error')
+            })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        })
+
+@app.route('/api/resume-preview/<resume_id>', methods=['GET'])
+def api_resume_preview(resume_id):
+    if resume_id not in resumes:
+        return jsonify({
+            'success': False,
+            'error': 'Resume not found'
+        }), 404
+    
+    resume = resumes[resume_id]
+    
+    # Generate HTML preview
+    html_preview = generate_html_preview(resume['data'], resume['theme'])
+    
+    return html_preview, 200, {'Content-Type': 'text/html'}
+
+@app.route('/api/download-resume/<resume_id>', methods=['GET'])
+def api_download_resume(resume_id):
+    if resume_id not in resumes:
+        return jsonify({
+            'success': False,
+            'error': 'Resume not found'
+        }), 404
+    
+    resume = resumes[resume_id]
+    pdf_path = resume['pdf_path']
+    
+    return send_file(
+        pdf_path,
+        as_attachment=True,
+        download_name=f"resume_{resume_id}.pdf"
+    )
+
+@app.route('/api/themes', methods=['GET'])
+def api_get_themes():
+    themes = get_available_themes()
+    return jsonify({
+        'success': True,
+        'data': {
+            'themes': themes
+        }
+    })
+
+def generate_html_preview(resume_data, theme):
+    """Generate HTML preview of the resume"""
+    # Theme-specific styles
+    theme_styles = {
+        'classic': """
+            body { font-family: 'Times New Roman', serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
+            h1 { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            h2 { border-bottom: 1px solid #ccc; padding-bottom: 5px; }
+            .section { margin-bottom: 20px; }
+            .contact-info { text-align: center; margin-bottom: 20px; }
+            .item { margin-bottom: 15px; }
+            .item-header { font-weight: bold; }
+            .item-date { font-style: italic; color: #666; }
+            .skills-list { display: flex; flex-wrap: wrap; }
+            .skill-item { margin-right: 10px; }
+        """,
+        'modern': """
+            body { font-family: 'Arial', sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f9f9f9; }
+            h1 { text-align: center; color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; }
+            h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; }
+            .section { margin-bottom: 25px; background-color: white; padding: 15px; border-radius: 5px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+            .contact-info { text-align: center; margin-bottom: 20px; color: #7f8c8d; }
+            .item { margin-bottom: 15px; }
+            .item-header { font-weight: bold; color: #2c3e50; }
+            .item-date { font-style: italic; color: #7f8c8d; }
+            .skills-list { display: flex; flex-wrap: wrap; }
+            .skill-item { margin-right: 10px; background-color: #3498db; color: white; padding: 3px 8px; border-radius: 3px; margin-bottom: 5px; }
+        """,
+        'minimal': """
+            body { font-family: 'Helvetica', sans-serif; line-height: 1.6; max-width: 800px; margin: 0 auto; padding: 20px; }
+            h1 { text-align: center; font-weight: 300; }
+            h2 { font-weight: 300; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+            .section { margin-bottom: 20px; }
+            .contact-info { text-align: center; margin-bottom: 20px; color: #666; }
+            .item { margin-bottom: 15px; }
+            .item-header { font-weight: 500; }
+            .item-date { color: #999; }
+            .skills-list { display: flex; flex-wrap: wrap; }
+            .skill-item { margin-right: 10px; }
+        """
+    }
+
+    # Generate HTML
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>{resume_data.get('name', 'Resume')} - Resume</title>
+        <style>
+            {theme_styles.get(theme, theme_styles['classic'])}
+        </style>
+    </head>
+    <body>
+        <h1>{resume_data.get('name', '')}</h1>
+        <div class="contact-info">
+            {resume_data.get('email', '')} | {resume_data.get('phone', '')} | {resume_data.get('location', '')}
+        </div>
+    """
+
+    # Education section
+    if 'education' in resume_data and resume_data['education']:
+        html += """
+        <div class="section">
+            <h2>Education</h2>
+        """
+        
+        for edu in resume_data['education']:
+            html += f"""
+            <div class="item">
+                <div class="item-header">{edu.get('school', '')}</div>
+                <div class="item-date">{edu.get('start_date', '')} - {edu.get('end_date', '')}</div>
+                <div>{edu.get('degree', '')} in {edu.get('field_of_study', '')}</div>
+                {f"<div>GPA: {edu.get('gpa', '')}</div>" if edu.get('gpa') else ''}
+                {f"<div>Courses: {', '.join(edu.get('courses', []))}</div>" if edu.get('courses') else ''}
+            </div>
+            """
+        
+        html += """</div>"""
+
+    # Experience section
+    if 'experience' in resume_data and resume_data['experience']:
+        html += """
+        <div class="section">
+            <h2>Experience</h2>
+        """
+        
+        for exp in resume_data['experience']:
+            html += f"""
+            <div class="item">
+                <div class="item-header">{exp.get('company', '')}</div>
+                <div class="item-date">{exp.get('start_date', '')} - {exp.get('end_date', '')}</div>
+                <div>{exp.get('title', '')}</div>
+            """
+            
+            if 'responsibilities' in exp and exp['responsibilities']:
+                html += "<ul>"
+                for resp in exp['responsibilities']:
+                    html += f"<li>{resp}</li>"
+                html += "</ul>"
+            
+            html += """</div>"""
+        
+        html += """</div>"""
+
+    # Skills section
+    if 'skills' in resume_data and resume_data['skills']:
+        html += """
+        <div class="section">
+            <h2>Skills</h2>
+            <div class="skills-list">
+        """
+        
+        for skill in resume_data['skills']:
+            html += f'<span class="skill-item">{skill}</span>'
+        
+        html += """
+            </div>
+        </div>
+        """
+
+    # Projects section
+    if 'projects' in resume_data and resume_data['projects']:
+        html += """
+        <div class="section">
+            <h2>Projects</h2>
+        """
+        
+        for proj in resume_data['projects']:
+            html += f"""
+            <div class="item">
+                <div class="item-header">{proj.get('name', '')}</div>
+                <div>{proj.get('description', '')}</div>
+                {f"<div>Technologies: {', '.join(proj.get('technologies', []))}</div>" if proj.get('technologies') else ''}
+            </div>
+            """
+        
+        html += """</div>"""
+
+    html += """
+    </body>
+    </html>
+    """
+
+    return html
 
 if __name__ == '__main__':
     print(f"Starting Python resume parser server on port {PORT}...")
