@@ -212,18 +212,8 @@ def save_resume_endpoint():
     print(f"Files: {list(request.files.keys())}")
     print(f"Args: {list(request.args.keys())}")
     
-    # Authenticate request
-    try:
-        user_id, token, error_response = authenticate_request()
-        if error_response:
-            return error_response
-    except Exception as e:
-        print(f"Authentication error: {str(e)}")
-        traceback.print_exc()
-        return jsonify({
-            'success': False,
-            'error': f'Authentication error: {str(e)}'
-        }), 500
+    # Get user_id from request or use 'anonymous' if not provided
+    user_id = request.form.get('user_id', 'anonymous')
     
     # Auto-generate resume ID using timestamp
     resume_id = f"{user_id}_{int(time.time())}_{str(uuid.uuid4())[:8]}"
@@ -267,13 +257,10 @@ def save_resume_endpoint():
             
             # Delete from DigitalOcean Spaces
             for resume in existing_resumes:
-                # Extract the object key from the URL
                 if resume.get('url'):
-                    # The URL format is: https://storage-jobmato.blr1.digitaloceanspaces.com/resumes/user_id/resume_id.pdf
-                    # We need to extract the "resumes/user_id/resume_id.pdf" part
                     url_parts = resume['url'].split('/')
-                    if len(url_parts) >= 4:  # Make sure URL has enough parts
-                        object_key = '/'.join(url_parts[3:])  # Skip protocol and domain
+                    if len(url_parts) >= 4:
+                        object_key = '/'.join(url_parts[3:])
                         print(f"Deleting file from Spaces: {object_key}")
                         delete_file_from_spaces(object_key)
             
@@ -307,11 +294,20 @@ def save_resume_endpoint():
         from database import save_resume_document
         saved_id = save_resume_document(document)
         
-        # Create simplified response
+        # Create response in the format shown in README
         result = {
             'resume_id': saved_id,
             'user_id': user_id,
-            'content': parsed_data,
+            'content': {
+                'name': parsed_data.get('name', ''),
+                'email': parsed_data.get('email', ''),
+                'phone': parsed_data.get('phone', ''),
+                'skills': parsed_data.get('skills', []),
+                'education': parsed_data.get('education', []),
+                'experience': parsed_data.get('experience', []),
+                'certifications': parsed_data.get('certifications', []),
+                'raw_content': parsed_data.get('raw_content', '')
+            },
             'format': resume_format,
             'file_url': file_url,
             'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content
