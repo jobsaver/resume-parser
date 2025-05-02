@@ -8,6 +8,7 @@ from rendercv_integration import resume_renderer
 from database import save_resume_document
 from storage import upload_file_to_spaces, generate_spaces_key
 from template_manager import ThemeManager
+import yaml
 
 # Initialize theme manager
 theme_manager = ThemeManager()
@@ -50,7 +51,7 @@ def preview_resume(theme_id, resume_data):
     
     Args:
         theme_id: Theme identifier
-        resume_data: Resume content
+        resume_data: Resume content in YAML format
         
     Returns:
         tuple: (success, result)
@@ -58,26 +59,33 @@ def preview_resume(theme_id, resume_data):
     try:
         if not theme_manager.get_theme(theme_id):
             return False, f"Theme '{theme_id}' not found"
-        
+
+        # Convert YAML resume_data to dictionary
+        resume_data_dict = yaml.safe_load(resume_data)
+
+        # Validate resume_data structure
+        if 'cv' not in resume_data_dict or 'design' not in resume_data_dict:
+            return False, 'Invalid resume_data structure'
+
         # Create resume using ResumeRenderer
-        success, result = resume_renderer.render_resume(resume_data, theme_id)
-        
+        success, result = resume_renderer.render_resume(resume_data_dict, theme_id)
+
         if not success:
             return False, result.get('error', 'Unknown error creating preview')
-        
+
         # Get the HTML content
         html_path = result.get('html_path')
         if not html_path:
             return False, 'No HTML preview generated'
-            
+
         with open(html_path, 'r') as f:
             html_content = f.read()
-            
+
         return True, {
             'html': html_content,
             'theme': theme_manager.get_theme(theme_id)
         }
-        
+
     except Exception as e:
         return False, str(e)
 
@@ -193,21 +201,148 @@ def get_template_list():
     Get list of available templates
     
     Returns:
-        list: Available templates
+        tuple: (success, result)
     """
-    return template_manager.get_template_list()
+    try:
+        templates_list = theme_manager.get_themes()
+        return True, templates_list
+    except Exception as e:
+        return False, str(e)
 
 def get_template_details(template_id):
     """
-    Get template details
+    Get detailed information about a specific template
     
     Args:
-        template_id: Template ID
+        template_id: Template identifier
         
     Returns:
-        dict: Template details or None if not found
+        tuple: (success, result)
     """
-    return template_manager.get_template(template_id)
+    try:
+        template = theme_manager.get_theme(template_id)
+        if not template:
+            return False, f"Template '{template_id}' not found"
+        
+        return True, template
+    except Exception as e:
+        return False, str(e)
+
+def preview_resume(template_id, resume_data):
+    """
+    Generate HTML preview for resume with given template
+    
+    Args:
+        template_id: Template identifier
+        resume_data: Resume content in YAML format
+        
+    Returns:
+        tuple: (success, result)
+    """
+    try:
+        if not theme_manager.get_theme(template_id):
+            return False, f"Template '{template_id}' not found"
+
+        # Convert YAML resume_data to dictionary
+        resume_data_dict = yaml.safe_load(resume_data)
+
+        # Validate resume_data structure
+        if 'cv' not in resume_data_dict or 'design' not in resume_data_dict:
+            return False, 'Invalid resume_data structure'
+
+        # Create resume using ResumeRenderer
+        success, result = resume_renderer.render_resume(resume_data_dict, template_id)
+
+        if not success:
+            return False, result.get('error', 'Unknown error creating preview')
+
+        # Get the HTML content
+        html_path = result.get('html_path')
+        if not html_path:
+            return False, 'No HTML preview generated'
+
+        with open(html_path, 'r') as f:
+            html_content = f.read()
+
+        return True, {
+            'html': html_content,
+            'template': theme_manager.get_theme(template_id)
+        }
+
+    except Exception as e:
+        return False, str(e)
+
+def create_resume_with_rendercv(user_id, resume_data, template_id='classic'):
+    """
+    Create a resume using RenderCV
+    
+    Args:
+        user_id: User ID
+        resume_data: Resume content in YAML format
+        template_id: Template identifier
+        
+    Returns:
+        tuple: (success, result)
+    """
+    try:
+        if not theme_manager.get_theme(template_id):
+            return False, f"Template '{template_id}' not found"
+
+        # Convert YAML resume_data to dictionary
+        resume_data_dict = yaml.safe_load(resume_data)
+
+        # Validate resume_data structure
+        if 'cv' not in resume_data_dict or 'design' not in resume_data_dict:
+            return False, 'Invalid resume_data structure'
+
+        # Create resume using ResumeRenderer
+        success, result = resume_renderer.render_resume(resume_data_dict, template_id)
+
+        if not success:
+            return False, result.get('error', 'Unknown error creating resume')
+
+        # Upload the generated PDF
+        pdf_path = result['pdf_path']
+        resume_id = result['resume_id']
+        spaces_key = generate_spaces_key(user_id, resume_id, f"{resume_id}.pdf")
+
+        upload_success, spaces_result = upload_file_to_spaces(pdf_path, spaces_key, 'application/pdf')
+
+        if not upload_success:
+            return False, f'Error uploading file to storage: {spaces_result}'
+
+        # Store the file URL
+        file_url = spaces_result
+
+        # Create document
+        document = {
+            "resume_id": resume_id,
+            "user_id": user_id,
+            "content": resume_data_dict,
+            "url": file_url,
+            "format": "rendercv",
+            "template": template_id
+        }
+
+        # Save to database
+        saved_id = save_resume_document(document)
+
+        # Create response
+        response_result = {
+            'resume_id': saved_id,
+            'user_id': user_id,
+            'content': resume_data_dict,
+            'format': 'rendercv',
+            'template': theme_manager.get_theme(template_id),
+            'file_url': file_url,
+            'preview_url': f'/api/resume-preview/{saved_id}',
+            'download_url': f'/api/download-resume/{saved_id}'
+        }
+
+        return True, response_result
+
+    except Exception as e:
+        return False, str(e)
 
 def get_template_preview(template_id):
     """
@@ -222,4 +357,23 @@ def get_template_preview(template_id):
     template = template_manager.get_template(template_id)
     if not template:
         return False, f'Template {template_id} not found'
-    return True, template['preview_png'] 
+    return True, template['preview_png']
+
+def get_full_template_data(template_id):
+    """
+    Get the full template data for a specific template ID
+    
+    Args:
+        template_id: Template identifier
+        
+    Returns:
+        tuple: (success, result)
+    """
+    try:
+        template_data = theme_manager.get_full_template(template_id)
+        if not template_data:
+            return False, f"Template '{template_id}' not found"
+        
+        return True, template_data
+    except Exception as e:
+        return False, str(e) 

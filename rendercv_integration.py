@@ -7,20 +7,28 @@ import json
 import tempfile
 from pathlib import Path
 import uuid
-from rendercv import renderer
+from rendercv.renderer import (
+    create_a_typst_file,
+    create_a_markdown_file,
+    render_pngs_from_typst,
+    render_an_html_from_markdown
+)
+from rendercv.data.models import RenderCVDataModel
+import yaml
+from typing import Union
 
 class ResumeRenderer:
     def __init__(self):
         self.temp_dir = Path(tempfile.gettempdir()) / "rendercv-temp"
         self.temp_dir.mkdir(exist_ok=True)
 
-    def render_resume(self, resume_data, theme_id):
+    def render_resume(self, resume_data, template_id):
         """
         Render a resume using RenderCV
         
         Args:
-            resume_data (dict): Resume data to render
-            theme_id (str): Theme identifier
+            resume_data (Union[str, dict]): Resume data in YAML format or dictionary to render
+            template_id (str): Template identifier
             
         Returns:
             tuple: (success, result)
@@ -28,6 +36,13 @@ class ResumeRenderer:
                 - result (dict): Result data or error message
         """
         try:
+            # Convert YAML resume_data to dictionary if it's a string
+            resume_data_dict = yaml.safe_load(resume_data) if isinstance(resume_data, str) else resume_data
+
+            # Validate resume_data structure
+            if 'cv' not in resume_data_dict or 'design' not in resume_data_dict:
+                return False, {'error': 'Invalid resume_data structure'}
+
             # Create a unique ID for this resume
             resume_id = str(uuid.uuid4())
             
@@ -39,28 +54,38 @@ class ResumeRenderer:
             yaml_file = resume_dir / "resume.yaml"
             
             # Convert resume data to RenderCV format
-            rendercv_data = self._convert_to_rendercv_format(resume_data, theme_id)
+            rendercv_data = self._convert_to_rendercv_format(resume_data_dict, template_id)
+            
+            # Ensure rendercv_data is an instance of RenderCVDataModel
+            rendercv_data_model = RenderCVDataModel(**rendercv_data)
             
             # Write the YAML file
             with open(yaml_file, "w") as f:
-                json.dump(rendercv_data, f, indent=2)
+                yaml.dump(rendercv_data, f)
             
             # Create output directory
             output_dir = resume_dir / "output"
             output_dir.mkdir(exist_ok=True)
             
-            # Generate the resume using the renderer function
-            renderer.renderer(str(yaml_file), str(output_dir), theme=theme_id)
+            # Generate Typst file
+            typst_file = create_a_typst_file(rendercv_data_model, output_dir)
             
-            # Get the paths to the generated files
-            pdf_path = output_dir / f"{resume_id}.pdf"
-            html_path = output_dir / f"{resume_id}.html"
+            # Generate Markdown file
+            markdown_file = create_a_markdown_file(rendercv_data_model, output_dir)
+            
+            # Generate HTML from Markdown
+            html_file = render_an_html_from_markdown(markdown_file)
+            
+            # Generate PNGs from Typst
+            png_files = render_pngs_from_typst(typst_file)
             
             # Return the result
             return True, {
                 "resume_id": resume_id,
-                "pdf_path": str(pdf_path),
-                "html_path": str(html_path),
+                "typst_path": str(typst_file),
+                "markdown_path": str(markdown_file),
+                "html_path": str(html_file),
+                "png_paths": [str(png) for png in png_files],
                 "yaml_path": str(yaml_file),
                 "output_dir": str(output_dir)
             }

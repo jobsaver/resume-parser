@@ -1,0 +1,64 @@
+design:
+  theme: classic
+  description: "A clean and professional template with traditional layout"
+  styles:
+    font_family: "Source Sans 3"
+    heading_font_family: "Source Sans 3"
+    primary_color: "#004F90"
+    secondary_color: "#333333"
+    text_color: "#000000"
+    accent_color: "#808080"
+    spacing: "standard"
+    sections_style: "with-partial-line"
+    page_margins:
+      top: "2cm"
+      bottom: "2cm"
+      left: "2cm"
+      right: "2cm"
+
+cv:
+  name: ""
+  title: ""
+  email: ""
+  phone: ""
+  location: ""
+  linkedin: ""
+  github: ""
+  summary: ""
+  
+  sections:
+    education:
+      - institution: ""
+        area: ""
+        degree: ""
+        start_date: ""
+        end_date: ""
+        gpa: ""
+        highlights: []
+    
+    experience:
+      - company: ""
+        position: ""
+        location: ""
+        start_date: ""
+        end_date: ""
+        highlights: []
+    
+    projects:
+      - name: ""
+        description: ""
+        url: ""
+        start_date: ""
+        end_date: ""
+        highlights: []
+        technologies: []
+    
+    skills:
+      - category: ""
+        items: []
+    
+    publications:
+      - title: ""
+        authors: []
+        doi: ""
+        date: "" 

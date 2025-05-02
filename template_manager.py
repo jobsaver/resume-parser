@@ -28,7 +28,12 @@ class ThemeManager:
             theme_id = yaml_file.stem
             with open(yaml_file, 'r') as f:
                 theme_data = yaml.safe_load(f)
-                
+
+            # Ensure the theme data matches the expected structure
+            if 'design' not in theme_data or 'cv' not in theme_data:
+                print(f"Warning: Theme {theme_id} is missing required sections.")
+                continue
+
             themes[theme_id] = {
                 'id': theme_id,
                 'name': theme_data.get('design', {}).get('theme', theme_id).title(),
@@ -51,45 +56,55 @@ class ThemeManager:
             'sections': {}
         }
         
-        cv_data = theme_data.get('cv', {})
-        
         # Extract personal info fields
-        for key in cv_data.keys():
-            if key != 'sections':
-                fields['personal_info'].append({
-                    'name': key,
-                    'type': 'text',
-                    'required': key in ['name', 'email']
-                })
+        personal_info_fields = [
+            'name', 'title', 'email', 'phone', 'location',
+            'linkedin', 'github', 'summary'
+        ]
         
-        # Extract section fields
-        sections = cv_data.get('sections', {})
-        for section_name, section_content in sections.items():
-            if isinstance(section_content, list) and len(section_content) > 0:
-                sample_entry = section_content[0]
-                if isinstance(sample_entry, dict):
-                    fields['sections'][section_name] = {
-                        'type': 'list',
-                        'fields': [
-                            {'name': k, 'type': 'text' if isinstance(v, str) else 'list'}
-                            for k, v in sample_entry.items()
-                        ]
-                    }
-                else:
-                    # Handle simple list of strings
-                    fields['sections'][section_name] = {
-                        'type': 'list',
-                        'fields': [{'name': 'item', 'type': 'text'}]
-                    }
-            elif isinstance(section_content, dict):
-                # Handle dictionary sections
-                fields['sections'][section_name] = {
-                    'type': 'dict',
-                    'fields': [
-                        {'name': k, 'type': 'text' if isinstance(v, str) else 'list'}
-                        for k, v in section_content.items()
-                    ]
-                }
+        for field in personal_info_fields:
+            fields['personal_info'].append({
+                'name': field,
+                'type': 'text',
+                'required': field in ['name', 'email']
+            })
+        
+        # Define section fields
+        section_fields = {
+            'education': [
+                {'name': 'institution', 'type': 'text', 'required': True},
+                {'name': 'area', 'type': 'text', 'required': True},
+                {'name': 'degree', 'type': 'text', 'required': True},
+                {'name': 'start_date', 'type': 'text', 'required': True},
+                {'name': 'end_date', 'type': 'text', 'required': True},
+                {'name': 'gpa', 'type': 'text', 'required': False},
+                {'name': 'highlights', 'type': 'list', 'required': False}
+            ],
+            'experience': [
+                {'name': 'company', 'type': 'text', 'required': True},
+                {'name': 'position', 'type': 'text', 'required': True},
+                {'name': 'location', 'type': 'text', 'required': False},
+                {'name': 'start_date', 'type': 'text', 'required': True},
+                {'name': 'end_date', 'type': 'text', 'required': True},
+                {'name': 'highlights', 'type': 'list', 'required': False}
+            ],
+            'projects': [
+                {'name': 'name', 'type': 'text', 'required': True},
+                {'name': 'description', 'type': 'text', 'required': True},
+                {'name': 'highlights', 'type': 'list', 'required': False},
+                {'name': 'technologies', 'type': 'list', 'required': False}
+            ],
+            'skills': [
+                {'name': 'category', 'type': 'text', 'required': True},
+                {'name': 'items', 'type': 'list', 'required': True}
+            ]
+        }
+        
+        for section_name, section_fields_list in section_fields.items():
+            fields['sections'][section_name] = {
+                'type': 'list',
+                'fields': section_fields_list
+            }
         
         return fields
 
@@ -159,4 +174,12 @@ class ThemeManager:
     def get_theme_fields(self, theme_id):
         """Get field structure for a specific theme."""
         theme = self.themes.get(theme_id)
-        return theme['fields'] if theme else None 
+        return theme['fields'] if theme else None
+
+    def get_full_template(self, template_id):
+        """Get the full template data for a specific template ID"""
+        template_path = self.themes_dir / f"{template_id}.yaml"
+        if not template_path.exists():
+            return None
+        with open(template_path, 'r') as f:
+            return yaml.safe_load(f) 
