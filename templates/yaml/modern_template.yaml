@@ -1,0 +1,83 @@
+design:
+  theme: modern
+  color_scheme:
+    primary: "#2c3e50"
+    secondary: "#3498db"
+    accent: "#e74c3c"
+  font:
+    heading: "Roboto"
+    body: "Open Sans"
+  layout:
+    spacing: "comfortable"
+    sections_style: "cards"
+
+cv:
+  name: "John Doe"
+  title: "Software Engineer"
+  email: "john.doe@example.com"
+  phone: "+1 (555) 123-4567"
+  location: "San Francisco, CA"
+  linkedin: "linkedin.com/in/johndoe"
+  github: "github.com/johndoe"
+  summary: "Innovative software engineer with 5+ years of experience in full-stack development and cloud architecture."
+  
+  sections:
+    experience:
+      - company: "Tech Solutions Inc."
+        position: "Senior Software Engineer"
+        location: "San Francisco, CA"
+        start_date: "2020-01"
+        end_date: "Present"
+        highlights:
+          - "Led development of microservices architecture serving 1M+ users"
+          - "Implemented CI/CD pipeline reducing deployment time by 60%"
+          - "Mentored junior developers and conducted code reviews"
+      
+      - company: "StartupCo"
+        position: "Full Stack Developer"
+        location: "San Francisco, CA"
+        start_date: "2018-03"
+        end_date: "2019-12"
+        highlights:
+          - "Developed responsive web applications using React and Node.js"
+          - "Optimized database queries improving performance by 40%"
+    
+    education:
+      - institution: "University of California, Berkeley"
+        area: "Computer Science"
+        degree: "Bachelor of Science"
+        start_date: "2014"
+        end_date: "2018"
+        gpa: "3.8"
+        highlights:
+          - "Data Structures and Algorithms"
+          - "Machine Learning"
+          - "Software Engineering"
+    
+    skills:
+      - category: "Programming Languages"
+        items:
+          - "Python"
+          - "JavaScript"
+          - "Java"
+          - "TypeScript"
+      
+      - category: "Technologies"
+        items:
+          - "React"
+          - "Node.js"
+          - "Docker"
+          - "Kubernetes"
+          - "AWS"
+    
+    projects:
+      - name: "E-commerce Platform"
+        description: "Built a scalable e-commerce platform using microservices architecture"
+        highlights:
+          - "Implemented payment gateway integration"
+          - "Designed real-time inventory management system"
+        technologies:
+          - "Node.js"
+          - "React"
+          - "MongoDB"
+          - "Docker" 

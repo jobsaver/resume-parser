@@ -1,0 +1,90 @@
+design:
+  theme: classic
+  color_scheme:
+    primary: "#000000"
+    secondary: "#333333"
+    accent: "#666666"
+  font:
+    heading: "Times New Roman"
+    body: "Garamond"
+  layout:
+    spacing: "compact"
+    sections_style: "traditional"
+
+cv:
+  name: "Jane Smith"
+  title: "Marketing Manager"
+  email: "jane.smith@example.com"
+  phone: "+1 (555) 987-6543"
+  location: "New York, NY"
+  linkedin: "linkedin.com/in/janesmith"
+  summary: "Results-driven marketing professional with 8+ years of experience in digital marketing and brand development."
+  
+  sections:
+    experience:
+      - company: "Global Marketing Corp"
+        position: "Senior Marketing Manager"
+        location: "New York, NY"
+        start_date: "2019-06"
+        end_date: "Present"
+        highlights:
+          - "Developed and executed marketing strategies resulting in 45% revenue growth"
+          - "Managed team of 5 marketing specialists and $1M annual budget"
+          - "Led rebranding initiative increasing brand recognition by 60%"
+      
+      - company: "Digital Solutions Ltd"
+        position: "Marketing Specialist"
+        location: "Boston, MA"
+        start_date: "2015-08"
+        end_date: "2019-05"
+        highlights:
+          - "Managed social media campaigns achieving 200% engagement increase"
+          - "Created content strategy driving 50% growth in organic traffic"
+    
+    education:
+      - institution: "Columbia University"
+        area: "Marketing"
+        degree: "Master of Business Administration"
+        start_date: "2013"
+        end_date: "2015"
+        gpa: "3.9"
+        highlights:
+          - "Marketing Strategy"
+          - "Brand Management"
+          - "Digital Marketing"
+      
+      - institution: "Boston University"
+        area: "Business Administration"
+        degree: "Bachelor of Science"
+        start_date: "2009"
+        end_date: "2013"
+        gpa: "3.7"
+    
+    skills:
+      - category: "Marketing"
+        items:
+          - "Digital Marketing"
+          - "Brand Development"
+          - "Content Strategy"
+          - "Social Media Management"
+      
+      - category: "Tools"
+        items:
+          - "Google Analytics"
+          - "HubSpot"
+          - "Salesforce"
+          - "Adobe Creative Suite"
+    
+    certifications:
+      - name: "Google Analytics Certification"
+        issuer: "Google"
+        date: "2020"
+      
+      - name: "HubSpot Inbound Marketing"
+        issuer: "HubSpot Academy"
+        date: "2019"
+    
+    achievements:
+      - "Marketing Excellence Award, Global Marketing Corp, 2021"
+      - "Best Digital Campaign, Industry Awards 2020"
+      - "Featured Speaker, Marketing Innovation Summit 2019" 
