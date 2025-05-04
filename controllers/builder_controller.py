@@ -1,379 +1,133 @@
 """
 Controller for resume builder functionality.
-Handles theme management and resume generation.
 """
-import uuid
-from flask import jsonify
-from rendercv_integration import resume_renderer
-from database import save_resume_document
-from storage import upload_file_to_spaces, generate_spaces_key
-from template_manager import ThemeManager
+from typing import Dict, Any, Tuple, Union
+import os
+from pathlib import Path
+import json
 import yaml
+from template_manager import ThemeManager
+from rendercv_integration import ResumeRenderer
 
-# Initialize theme manager
+# Initialize managers
 theme_manager = ThemeManager()
+resume_renderer = ResumeRenderer()
 
-def get_themes():
-    """
-    Get list of available themes
-    
-    Returns:
-        tuple: (success, result)
-    """
+def get_themes() -> Tuple[bool, Union[list, str]]:
+    """Get list of available themes"""
     try:
-        themes_list = theme_manager.get_themes()
-        return True, themes_list
+        themes = theme_manager.get_themes()
+        return True, themes
     except Exception as e:
         return False, str(e)
 
-def get_theme_details(theme_id):
-    """
-    Get detailed information about a specific theme
-    
-    Args:
-        theme_id: Theme identifier
-        
-    Returns:
-        tuple: (success, result)
-    """
+def get_theme_details(theme_id: str) -> Tuple[bool, Union[Dict[str, Any], str]]:
+    """Get details for a specific theme"""
     try:
         theme = theme_manager.get_theme(theme_id)
         if not theme:
-            return False, f"Theme '{theme_id}' not found"
-        
+            return False, f"Theme {theme_id} not found"
         return True, theme
     except Exception as e:
         return False, str(e)
 
-def preview_resume(theme_id, resume_data):
-    """
-    Generate HTML preview for resume with given theme
-    
-    Args:
-        theme_id: Theme identifier
-        resume_data: Resume content in YAML format
-        
-    Returns:
-        tuple: (success, result)
-    """
+def preview_resume(theme_id: str, resume_data: Dict[str, Any]) -> Tuple[bool, Union[Dict[str, Any], str]]:
+    """Generate a preview for a resume"""
     try:
-        if not theme_manager.get_theme(theme_id):
-            return False, f"Theme '{theme_id}' not found"
+        # Get theme template
+        yaml_content = theme_manager.get_theme_yaml(theme_id)
+        if not yaml_content:
+            return False, f"Theme {theme_id} not found"
 
-        # Convert YAML resume_data to dictionary
-        resume_data_dict = yaml.safe_load(resume_data)
+        # Load theme YAML structure
+        theme_structure = yaml.safe_load(yaml_content)
 
-        # Validate resume_data structure
-        if 'cv' not in resume_data_dict or 'design' not in resume_data_dict:
-            return False, 'Invalid resume_data structure'
-
-        # Create resume using ResumeRenderer
-        success, result = resume_renderer.render_resume(resume_data_dict, theme_id)
-
-        if not success:
-            return False, result.get('error', 'Unknown error creating preview')
-
-        # Get the HTML content
-        html_path = result.get('html_path')
-        if not html_path:
-            return False, 'No HTML preview generated'
-
-        with open(html_path, 'r') as f:
-            html_content = f.read()
-
-        return True, {
-            'html': html_content,
-            'theme': theme_manager.get_theme(theme_id)
-        }
-
-    except Exception as e:
-        return False, str(e)
-
-def create_resume_with_rendercv(user_id, resume_data, theme_id='classic'):
-    """
-    Create a resume using RenderCV
-    
-    Args:
-        user_id: User ID
-        resume_data: Resume content
-        theme_id: Theme identifier
-        
-    Returns:
-        tuple: (success, result)
-    """
-    try:
-        if not theme_manager.get_theme(theme_id):
-            return False, f"Theme '{theme_id}' not found"
-        
-        # Create resume using ResumeRenderer
+        # Render resume
         success, result = resume_renderer.render_resume(resume_data, theme_id)
-        
         if not success:
-            return False, result.get('error', 'Unknown error creating resume')
-        
-        # Upload the generated PDF
-        pdf_path = result['pdf_path']
-        resume_id = result['resume_id']
-        spaces_key = generate_spaces_key(user_id, resume_id, f"{resume_id}.pdf")
-        
-        upload_success, spaces_result = upload_file_to_spaces(pdf_path, spaces_key, 'application/pdf')
-        
-        if not upload_success:
-            return False, f'Error uploading file to storage: {spaces_result}'
-        
-        # Store the file URL
-        file_url = spaces_result
-        
-        # Create document
-        document = {
-            "resume_id": resume_id,
-            "user_id": user_id,
-            "content": resume_data,
-            "url": file_url,
-            "format": "rendercv",
-            "theme": theme_id
-        }
-        
-        # Save to database
-        saved_id = save_resume_document(document)
-        
-        # Create response
-        response_result = {
-            'resume_id': saved_id,
-            'user_id': user_id,
-            'content': resume_data,
-            'format': 'rendercv',
-            'theme': theme_manager.get_theme(theme_id),
-            'file_url': file_url,
-            'preview_url': f'/api/resume-preview/{saved_id}',
-            'download_url': f'/api/download-resume/{saved_id}'
-        }
-        
-        return True, response_result
-        
+            return False, str(result)
+
+        # Add full payload data to response
+        result['theme_structure'] = theme_structure
+        result['resume_data'] = resume_data
+
+        return True, result
     except Exception as e:
         return False, str(e)
 
-def create_resume_with_template(user_id, template_id, resume_data):
-    """
-    Create a resume using a template
-    
-    Args:
-        user_id: User ID
-        template_id: Template ID
-        resume_data: Resume content
-        
-    Returns:
-        tuple: (success, result)
-    """
+def create_resume_with_rendercv(user_id: str, resume_data: Dict[str, Any], theme_id: str) -> Tuple[bool, Union[Dict[str, Any], str]]:
+    """Create a new resume using RenderCV"""
     try:
-        # Generate resume using template
-        html_content = template_manager.create_resume(template_id, resume_data)
-        
-        # Generate resume ID
-        resume_id = str(uuid.uuid4())
-        
-        # Create document
-        document = {
-            "resume_id": resume_id,
-            "user_id": user_id,
-            "content": resume_data,
-            "template_id": template_id,
-            "format": "template",
-            "html_content": html_content
-        }
-        
-        # Save to database
-        saved_id = save_resume_document(document)
-        
-        return True, {
-            'resume_id': saved_id,
-            'html': html_content
-        }
-        
-    except ValueError as e:
-        return False, str(e)
-    except Exception as e:
-        return False, f'Failed to create resume: {str(e)}'
+        # Get theme template
+        yaml_content = theme_manager.get_theme_yaml(theme_id)
+        if not yaml_content:
+            return False, f"Theme {theme_id} not found"
 
-def get_template_list():
-    """
-    Get list of available templates
-    
-    Returns:
-        tuple: (success, result)
-    """
-    try:
-        templates_list = theme_manager.get_themes()
-        return True, templates_list
+        # Render resume
+        success, result = resume_renderer.render_resume(resume_data, theme_id)
+        if not success:
+            return False, str(result)
+
+        # Add metadata
+        result['user_id'] = user_id
+        result['theme_id'] = theme_id
+        result['resume_data'] = resume_data
+
+        return True, result
     except Exception as e:
         return False, str(e)
 
-def get_template_details(template_id):
-    """
-    Get detailed information about a specific template
-    
-    Args:
-        template_id: Template identifier
-        
-    Returns:
-        tuple: (success, result)
-    """
+def get_theme_preview(theme_id: str) -> Tuple[bool, Union[str, str]]:
+    """Get preview image for a theme"""
     try:
-        template = theme_manager.get_theme(template_id)
+        preview_path = theme_manager.get_theme_preview(theme_id)
+        if not preview_path:
+            return False, f"Preview for theme {theme_id} not found"
+        return True, preview_path
+    except Exception as e:
+        return False, str(e)
+
+def get_full_template_data(theme_id: str) -> Tuple[bool, Union[Dict[str, Any], str]]:
+    """Get full template data for a theme"""
+    try:
+        template = theme_manager.get_full_template(theme_id)
         if not template:
-            return False, f"Template '{template_id}' not found"
-        
+            return False, f"Template for theme {theme_id} not found"
         return True, template
     except Exception as e:
         return False, str(e)
 
-def preview_resume(template_id, resume_data):
-    """
-    Generate HTML preview for resume with given template
-    
-    Args:
-        template_id: Template identifier
-        resume_data: Resume content in YAML format
-        
-    Returns:
-        tuple: (success, result)
-    """
+def validate_resume_data(data: Dict[str, Any]) -> Tuple[bool, Union[None, str]]:
+    """Validate resume data against schema"""
     try:
-        if not theme_manager.get_theme(template_id):
-            return False, f"Template '{template_id}' not found"
+        # Basic structure validation
+        if not isinstance(data, dict):
+            return False, "Resume data must be a dictionary"
 
-        # Convert YAML resume_data to dictionary
-        resume_data_dict = yaml.safe_load(resume_data)
+        # Check required sections
+        if 'cv' not in data:
+            return False, "Missing required 'cv' section"
 
-        # Validate resume_data structure
-        if 'cv' not in resume_data_dict or 'design' not in resume_data_dict:
-            return False, 'Invalid resume_data structure'
+        cv_data = data['cv']
+        if not isinstance(cv_data, dict):
+            return False, "'cv' section must be a dictionary"
 
-        # Create resume using ResumeRenderer
-        success, result = resume_renderer.render_resume(resume_data_dict, template_id)
+        # Check required cv fields
+        required_cv_fields = ['name', 'email']
+        missing_fields = [field for field in required_cv_fields if field not in cv_data]
+        if missing_fields:
+            return False, f"Missing required fields in cv section: {', '.join(missing_fields)}"
 
-        if not success:
-            return False, result.get('error', 'Unknown error creating preview')
+        # Validate sections if present
+        if 'sections' in cv_data:
+            if not isinstance(cv_data['sections'], dict):
+                return False, "'sections' must be a dictionary"
 
-        # Get the HTML content
-        html_path = result.get('html_path')
-        if not html_path:
-            return False, 'No HTML preview generated'
+            # Validate each section
+            for section_name, section_data in cv_data['sections'].items():
+                if not isinstance(section_data, list):
+                    return False, f"Section '{section_name}' must be a list"
 
-        with open(html_path, 'r') as f:
-            html_content = f.read()
-
-        return True, {
-            'html': html_content,
-            'template': theme_manager.get_theme(template_id)
-        }
-
+        return True, None
     except Exception as e:
         return False, str(e)
-
-def create_resume_with_rendercv(user_id, resume_data, template_id='classic'):
-    """
-    Create a resume using RenderCV
-    
-    Args:
-        user_id: User ID
-        resume_data: Resume content in YAML format
-        template_id: Template identifier
-        
-    Returns:
-        tuple: (success, result)
-    """
-    try:
-        if not theme_manager.get_theme(template_id):
-            return False, f"Template '{template_id}' not found"
-
-        # Convert YAML resume_data to dictionary
-        resume_data_dict = yaml.safe_load(resume_data)
-
-        # Validate resume_data structure
-        if 'cv' not in resume_data_dict or 'design' not in resume_data_dict:
-            return False, 'Invalid resume_data structure'
-
-        # Create resume using ResumeRenderer
-        success, result = resume_renderer.render_resume(resume_data_dict, template_id)
-
-        if not success:
-            return False, result.get('error', 'Unknown error creating resume')
-
-        # Upload the generated PDF
-        pdf_path = result['pdf_path']
-        resume_id = result['resume_id']
-        spaces_key = generate_spaces_key(user_id, resume_id, f"{resume_id}.pdf")
-
-        upload_success, spaces_result = upload_file_to_spaces(pdf_path, spaces_key, 'application/pdf')
-
-        if not upload_success:
-            return False, f'Error uploading file to storage: {spaces_result}'
-
-        # Store the file URL
-        file_url = spaces_result
-
-        # Create document
-        document = {
-            "resume_id": resume_id,
-            "user_id": user_id,
-            "content": resume_data_dict,
-            "url": file_url,
-            "format": "rendercv",
-            "template": template_id
-        }
-
-        # Save to database
-        saved_id = save_resume_document(document)
-
-        # Create response
-        response_result = {
-            'resume_id': saved_id,
-            'user_id': user_id,
-            'content': resume_data_dict,
-            'format': 'rendercv',
-            'template': theme_manager.get_theme(template_id),
-            'file_url': file_url,
-            'preview_url': f'/api/resume-preview/{saved_id}',
-            'download_url': f'/api/download-resume/{saved_id}'
-        }
-
-        return True, response_result
-
-    except Exception as e:
-        return False, str(e)
-
-def get_template_preview(template_id):
-    """
-    Get template preview image path
-    
-    Args:
-        template_id: Template ID
-        
-    Returns:
-        tuple: (success, result)
-    """
-    template = template_manager.get_template(template_id)
-    if not template:
-        return False, f'Template {template_id} not found'
-    return True, template['preview_png']
-
-def get_full_template_data(template_id):
-    """
-    Get the full template data for a specific template ID
-    
-    Args:
-        template_id: Template identifier
-        
-    Returns:
-        tuple: (success, result)
-    """
-    try:
-        template_data = theme_manager.get_full_template(template_id)
-        if not template_data:
-            return False, f"Template '{template_id}' not found"
-        
-        return True, template_data
-    except Exception as e:
-        return False, str(e) 

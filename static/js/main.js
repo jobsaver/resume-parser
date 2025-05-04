@@ -405,4 +405,181 @@ document.addEventListener('DOMContentLoaded', function() {
         statusElement.textContent = message;
         statusElement.className = `badge bg-${type}`;
     }
-}); 
+});
+
+// Resume JSON handling functions
+
+function convertFormToJSON(formData) {
+    // Create base resume structure
+    const resumeData = {
+        cv: {
+            name: formData.get('name'),
+            email: formData.get('email'),
+            phone: formData.get('phone'),
+            location: formData.get('location'),
+            sections: {
+                education: [],
+                experience: [],
+                skills: [],
+                projects: []
+            }
+        },
+        design: {
+            theme: formData.get('theme') || 'classic'
+        }
+    };
+
+    // Collect education entries
+    document.querySelectorAll('[id^="education-"]').forEach(section => {
+        const id = section.id.split('-')[1];
+        resumeData.cv.sections.education.push({
+            institution: formData.get(`education[${id}][institution]`),
+            degree: formData.get(`education[${id}][degree]`),
+            area: formData.get(`education[${id}][area]`),
+            start_date: formData.get(`education[${id}][start_date]`),
+            end_date: formData.get(`education[${id}][end_date]`),
+            location: formData.get(`education[${id}][location]`),
+            highlights: formData.get(`education[${id}][highlights]`)?.split('\n') || []
+        });
+    });
+
+    // Collect experience entries
+    document.querySelectorAll('[id^="experience-"]').forEach(section => {
+        const id = section.id.split('-')[1];
+        resumeData.cv.sections.experience.push({
+            company: formData.get(`experience[${id}][company]`),
+            position: formData.get(`experience[${id}][position]`),
+            start_date: formData.get(`experience[${id}][start_date]`),
+            end_date: formData.get(`experience[${id}][end_date]`),
+            location: formData.get(`experience[${id}][location]`),
+            highlights: formData.get(`experience[${id}][highlights]`)?.split('\n') || []
+        });
+    });
+
+    // Collect skills entries
+    document.querySelectorAll('[id^="skills-"]').forEach(section => {
+        const id = section.id.split('-')[1];
+        resumeData.cv.sections.skills.push({
+            label: formData.get(`skills[${id}][label]`),
+            details: formData.get(`skills[${id}][details]`)
+        });
+    });
+
+    // Collect projects entries
+    document.querySelectorAll('[id^="projects-"]').forEach(section => {
+        const id = section.id.split('-')[1];
+        resumeData.cv.sections.projects.push({
+            name: formData.get(`projects[${id}][name]`),
+            description: formData.get(`projects[${id}][description]`),
+            start_date: formData.get(`projects[${id}][start_date]`),
+            end_date: formData.get(`projects[${id}][end_date]`),
+            highlights: formData.get(`projects[${id}][highlights]`)?.split('\n') || []
+        });
+    });
+
+    return resumeData;
+}
+
+async function generatePreview(resumeData) {
+    try {
+        const response = await fetch('/api/resumes/preview', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify(resumeData)
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+            // Display the HTML preview
+            const previewContainer = document.getElementById('preview-content');
+            previewContainer.innerHTML = result.data.html;
+            
+            // Update theme if provided
+            const themeSelect = document.getElementById('theme-select');
+            if (themeSelect && result.data.theme) {
+                themeSelect.value = result.data.theme;
+            }
+            
+            // Show preview section, hide form
+            document.getElementById('preview-section').style.display = 'block';
+            document.getElementById('dynamic-fields').style.display = 'none';
+        } else {
+            alert('Error generating preview: ' + result.error);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error generating preview. Please try again.');
+    }
+}
+
+async function downloadResume(resumeData, format = 'pdf') {
+    try {
+        const response = await fetch(`/api/resumes/download?format=${format}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getAuthToken()}`
+            },
+            body: JSON.stringify(resumeData)
+        });
+
+        if (format === 'pdf') {
+            // For PDF, handle as blob and trigger download
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `resume.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } else {
+            // For HTML, get the content from response
+            const result = await response.json();
+            if (result.success) {
+                // Create and trigger HTML download
+                const blob = new Blob([result.data.html], { type: 'text/html' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `resume.html`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            } else {
+                throw new Error(result.error);
+            }
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error downloading resume. Please try again.');
+    }
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Preview button click handler
+    document.getElementById('preview-btn')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        const form = document.getElementById('resume-form');
+        const formData = new FormData(form);
+        const resumeData = convertFormToJSON(formData);
+        generatePreview(resumeData);
+    });
+
+    // Download button click handler
+    document.getElementById('download-btn')?.addEventListener('click', function(e) {
+        e.preventDefault();
+        const format = document.getElementById('format-select')?.value || 'pdf';
+        const form = document.getElementById('resume-form');
+        const formData = new FormData(form);
+        const resumeData = convertFormToJSON(formData);
+        downloadResume(resumeData, format);
+    });
+});

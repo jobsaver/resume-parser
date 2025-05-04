@@ -1,56 +1,49 @@
 """
-Authentication utility functions.
+Authentication utilities for the resume parser application.
 """
+from functools import wraps
 from flask import request, jsonify
-from database import validate_token
+import os
 
 def authenticate_request():
     """
-    Authenticate the request using the token from headers, query parameters, or form data
-    
-    Returns:
-        tuple: (user_id, token, error_response)
-        If authentication fails, error_response will be a Flask response object
-        Otherwise, error_response will be None
+    Decorator to authenticate API requests using token-based authentication.
     """
-    # Get authentication token from headers
-    token = request.headers.get('Authorization')
-    
-    # If token is in the format "Bearer <token>", extract the token
-    if token and token.startswith('Bearer '):
-        token = token.split(' ')[1]
-    
-    # If token is not in headers, try to get it from query parameters
-    if not token:
-        token = request.args.get('token')
-    
-    # If token is not in query parameters, try to get it from form data
-    if not token:
-        token = request.form.get('token')
-    
-    # Get user ID from query parameters or form data
-    user_id = request.args.get('user_id') or request.form.get('user_id')
-    
-    print(f"Auth request: user_id={user_id}, token={token[:4] if token else 'None'}...")
-    
-    # Validate inputs
-    if not token:
-        return None, None, (jsonify({
-            'success': False,
-            'error': 'Authentication token is required'
-        }), 401)
-    
-    if not user_id:
-        return None, None, (jsonify({
-            'success': False,
-            'error': 'User ID is required'
-        }), 400)
-    
-    # Validate token for specific user
-    if not validate_token(user_id, token):
-        return None, None, (jsonify({
-            'success': False,
-            'error': 'Invalid authentication token'
-        }), 401)
-    
-    return user_id, token, None 
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            # Get token from Authorization header
+            auth_header = request.headers.get('Authorization')
+            if not auth_header:
+                return jsonify({
+                    'success': False,
+                    'error': 'No authorization token provided'
+                }), 401
+
+            # Extract token from Bearer format
+            try:
+                token = auth_header.split(' ')[1]
+            except IndexError:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid authorization header format'
+                }), 401
+
+            # Check if token exists in environment variables
+            user_id = None
+            for key, value in os.environ.items():
+                if key.startswith('TOKEN_') and value == token:
+                    user_id = key.replace('TOKEN_', '')
+                    break
+
+            if not user_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid or expired token'
+                }), 401
+
+            # Add user_id to request context
+            request.user_id = user_id
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator 

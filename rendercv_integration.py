@@ -15,20 +15,20 @@ from rendercv.renderer import (
 )
 from rendercv.data.models import RenderCVDataModel
 import yaml
-from typing import Union
+from typing import Union, Dict, Any
 
 class ResumeRenderer:
     def __init__(self):
         self.temp_dir = Path(tempfile.gettempdir()) / "rendercv-temp"
         self.temp_dir.mkdir(exist_ok=True)
 
-    def render_resume(self, resume_data, template_id):
+    def render_resume(self, resume_data: Union[str, Dict[str, Any]], theme_id: str = 'classic'):
         """
         Render a resume using RenderCV
         
         Args:
             resume_data (Union[str, dict]): Resume data in YAML format or dictionary to render
-            template_id (str): Template identifier
+            theme_id (str): Theme identifier
             
         Returns:
             tuple: (success, result)
@@ -40,8 +40,8 @@ class ResumeRenderer:
             resume_data_dict = yaml.safe_load(resume_data) if isinstance(resume_data, str) else resume_data
 
             # Validate resume_data structure
-            if 'cv' not in resume_data_dict or 'design' not in resume_data_dict:
-                return False, {'error': 'Invalid resume_data structure'}
+            if 'cv' not in resume_data_dict:
+                return False, {'error': 'Invalid resume_data structure: missing cv section'}
 
             # Create a unique ID for this resume
             resume_id = str(uuid.uuid4())
@@ -54,7 +54,7 @@ class ResumeRenderer:
             yaml_file = resume_dir / "resume.yaml"
             
             # Convert resume data to RenderCV format
-            rendercv_data = self._convert_to_rendercv_format(resume_data_dict, template_id)
+            rendercv_data = self._convert_to_rendercv_format(resume_data_dict, theme_id)
             
             # Ensure rendercv_data is an instance of RenderCVDataModel
             rendercv_data_model = RenderCVDataModel(**rendercv_data)
@@ -95,7 +95,7 @@ class ResumeRenderer:
             traceback.print_exc()
             return False, {"error": str(e)}
 
-    def _convert_to_rendercv_format(self, resume_data, theme_id):
+    def _convert_to_rendercv_format(self, resume_data: Dict[str, Any], theme_id: str) -> Dict[str, Any]:
         """
         Convert resume data to RenderCV format
         
@@ -106,104 +106,36 @@ class ResumeRenderer:
         Returns:
             dict: RenderCV data model
         """
-        # Extract basic information
-        name = resume_data.get("name", "Unknown")
-        email = resume_data.get("email", "")
-        phone = resume_data.get("phone", "")
-        location = resume_data.get("location", "")
+        # Extract basic information from cv section
+        cv_data = resume_data.get("cv", {})
+        name = cv_data.get("name", "Unknown")
+        email = cv_data.get("email", "")
+        phone = cv_data.get("phone", "")
+        location = cv_data.get("location", "")
+        website = cv_data.get("website", "")
+        social_networks = cv_data.get("social_networks", [])
         
         # Create a basic RenderCV data model
         rendercv_data = {
-            "design": {
-                "theme": theme_id
-            },
+            "design": resume_data.get("design", {"theme": theme_id}),
             "cv": {
                 "name": name,
                 "email": email,
                 "phone": phone,
                 "location": location,
+                "website": website,
+                "social_networks": social_networks,
                 "sections": {}
             }
         }
         
-        # Add education section if available
-        if "education" in resume_data and resume_data["education"]:
-            education_entries = []
-            for edu in resume_data["education"]:
-                education_entry = {
-                    "institution": edu.get("school", ""),
-                    "area": edu.get("degree", ""),
-                    "degree": edu.get("field_of_study", ""),
-                    "start_date": edu.get("start_date", ""),
-                    "end_date": edu.get("end_date", ""),
-                    "highlights": []
-                }
-                
-                # Add GPA if available
-                if "gpa" in edu:
-                    education_entry["highlights"].append(f"GPA: {edu['gpa']}")
-                    
-                # Add coursework if available
-                if "courses" in edu and edu["courses"]:
-                    courses = ", ".join(edu["courses"])
-                    education_entry["highlights"].append(f"Coursework: {courses}")
-                    
-                education_entries.append(education_entry)
-                
-            rendercv_data["cv"]["sections"]["education"] = education_entries
-        
-        # Add experience section if available
-        if "experience" in resume_data and resume_data["experience"]:
-            experience_entries = []
-            for exp in resume_data["experience"]:
-                experience_entry = {
-                    "company": exp.get("company", ""),
-                    "position": exp.get("title", ""),
-                    "start_date": exp.get("start_date", ""),
-                    "end_date": exp.get("end_date", ""),
-                    "highlights": []
-                }
-                
-                # Add responsibilities if available
-                if "responsibilities" in exp and exp["responsibilities"]:
-                    for resp in exp["responsibilities"]:
-                        experience_entry["highlights"].append(resp)
-                        
-                experience_entries.append(experience_entry)
-                
-            rendercv_data["cv"]["sections"]["experience"] = experience_entries
-        
-        # Add skills section if available
-        if "skills" in resume_data and resume_data["skills"]:
-            skills_entries = []
-            for skill in resume_data["skills"]:
-                if isinstance(skill, dict):
-                    skills_entries.append(skill)
-                else:
-                    skills_entries.append({"name": skill})
-                    
-            rendercv_data["cv"]["sections"]["skills"] = skills_entries
-        
-        # Add projects section if available
-        if "projects" in resume_data and resume_data["projects"]:
-            project_entries = []
-            for project in resume_data["projects"]:
-                project_entry = {
-                    "name": project.get("name", ""),
-                    "description": project.get("description", ""),
-                    "highlights": []
-                }
-                
-                # Add technologies if available
-                if "technologies" in project and project["technologies"]:
-                    techs = ", ".join(project["technologies"])
-                    project_entry["highlights"].append(f"Technologies: {techs}")
-                    
-                project_entries.append(project_entry)
-                
-            rendercv_data["cv"]["sections"]["projects"] = project_entries
+        # Add sections from cv.sections
+        sections = cv_data.get("sections", {})
+        for section_name, section_data in sections.items():
+            if isinstance(section_data, list):
+                rendercv_data["cv"]["sections"][section_name] = section_data
         
         return rendercv_data
 
 # Create a global instance
-resume_renderer = ResumeRenderer() 
+resume_renderer = ResumeRenderer()

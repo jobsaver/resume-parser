@@ -8,36 +8,56 @@ from controllers.builder_controller import (
     get_theme_details,
     preview_resume,
     create_resume_with_rendercv,
-    get_template_list,
-    get_template_details,
-    get_full_template_data
+    get_theme_preview,
+    get_full_template_data,
+    validate_resume_data
 )
 from utils.auth import authenticate_request
 import json
 import yaml
 from pathlib import Path
 import re
+import os
 
 # Create blueprint
 builder_bp = Blueprint('builder', __name__, url_prefix='/api')
 
 @builder_bp.route('/themes', methods=['GET'])
 def list_themes():
-    """Get list of available themes"""
-    success, result = get_themes()
-    
-    if success:
+    """Get list of available themes with their full YAML structure"""
+    try:
+        success, themes = get_themes()
+        if success:
+            themes_with_yaml = []
+            for theme in themes:
+                theme_id = theme['id']
+                yaml_path = Path("templates/yaml") / f"{theme_id}.yaml"
+                if yaml_path.exists():
+                    with open(yaml_path, 'r') as f:
+                        yaml_content = yaml.safe_load(f)
+                        themes_with_yaml.append({
+                            **theme,
+                            'yaml_structure': yaml_content
+                        })
+                else:
+                    themes_with_yaml.append(theme)
+
+            return jsonify({
+                'success': True,
+                'data': {
+                    'themes': themes_with_yaml,
+                    'message': 'Themes retrieved successfully'
+                }
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Error getting themes: {themes}'
+            }), 500
+    except Exception as e:
         return jsonify({
-            'success': True,
-            'data': {
-                'themes': result,
-                'message': 'Themes retrieved successfully'
-            }
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'error': f'Error getting themes: {result}'
+            'success': False,  
+            'error': str(e)
         }), 500
 
 @builder_bp.route('/themes/<theme_id>', methods=['GET'])
@@ -61,38 +81,210 @@ def get_theme_yaml(theme_id):
             'error': str(e)
         }), 500
 
-@builder_bp.route('/templates', methods=['GET'])
-def list_templates():
-    """Get list of available templates"""
-    success, result = get_template_list()
+@builder_bp.route('/themes/<theme_id>/preview', methods=['GET'])
+def get_theme_preview_image(theme_id):
+    """Get preview image for a specific theme"""
+    success, result = get_theme_preview(theme_id)
     
     if success:
-        return jsonify({
-            'success': True,
-            'data': {
-                'templates': result,
-                'message': 'Templates retrieved successfully'
-            }
-        })
-    else:
-        return jsonify({
-            'success': False,
-            'error': f'Error getting templates: {result}'
-        }), 500
-
-@builder_bp.route('/templates/<template_id>', methods=['GET'])
-def get_template_data(template_id):
-    """Get full template data for a specific template ID and return as YAML"""
-    success, result = get_full_template_data(template_id)
-    
-    if success:
-        # Return the full YAML content of the template
-        return result, 200, {'Content-Type': 'application/x-yaml'}
+        return send_file(result, mimetype='image/png')
     else:
         return jsonify({
             'success': False,
             'error': result
-        }), 404 if 'not found' in str(result).lower() else 500
+        }), 404
+
+@builder_bp.route('/resumes/preview', methods=['POST'])
+def preview_resume_endpoint():
+    """Generate preview for a resume using JSON input"""
+    try:
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Content-Type must be application/json'
+            }), 400
+
+        resume_data = request.get_json()
+        
+        if not resume_data or not isinstance(resume_data, dict):
+            return jsonify({
+                'success': False,  
+                'error': 'Invalid request body. Must be a valid JSON object.'
+            }), 400
+
+        # Validate JSON data against schema
+        is_valid, error_message = validate_resume_data(resume_data)
+        if not is_valid:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid resume data: {error_message}'
+            }), 400
+
+        # Get theme ID from the design section if present, otherwise use default
+        theme_id = resume_data.get('design', {}).get('theme', 'classic')
+        
+        # Generate preview using RenderCV
+        success, result = preview_resume(theme_id, resume_data)
+        
+        if success:
+            # Get the HTML content from the HTML file
+            html_file = result.get('html_path')
+            if html_file and os.path.exists(html_file):
+                with open(html_file, 'r') as f:
+                    html_content = f.read()
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'html': html_content,
+                        'theme': theme_id,
+                        'resume_data': resume_data,
+                        'theme_structure': result.get('theme_structure', {}),
+                        'template_data': result
+                    }
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Failed to generate HTML preview'
+                }), 500
+        else:
+            return jsonify({
+                'success': False,
+                'error': str(result)
+            }), 500
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error generating preview: {str(e)}'
+        }), 500
+
+@builder_bp.route('/resumes/create', methods=['POST'])
+@authenticate_request()
+def create_resume_endpoint():
+    """Create a new resume"""
+    try:
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Content-Type must be application/json'
+            }), 400
+
+        # Get user ID from authentication
+        user_id = request.user_id
+        
+        resume_data = request.get_json()
+            
+        if not resume_data or not isinstance(resume_data, dict):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid request body. Must be a valid JSON object.'
+            }), 400
+
+        # Validate JSON data against schema
+        is_valid, error_message = validate_resume_data(resume_data)
+        if not is_valid:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid resume data: {error_message}'
+            }), 400
+
+        # Get theme ID from the design section if present, otherwise use default
+        theme_id = resume_data.get('design', {}).get('theme', 'classic')
+
+        # Create resume
+        success, result = create_resume_with_rendercv(user_id, resume_data, theme_id)
+        
+        if success:
+            return jsonify({
+                'success': True,
+                'data': result
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': str(result)
+            }), 500
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error creating resume: {str(e)}'
+        }), 500
+
+@builder_bp.route('/resumes/download', methods=['POST'])
+@authenticate_request()
+def download_resume_endpoint():
+    """Download a rendered resume from JSON data"""
+    try:
+        if not request.is_json:
+            return jsonify({
+                'success': False,
+                'error': 'Content-Type must be application/json'
+            }), 400
+
+        # Get user ID from authentication
+        user_id = request.user_id
+        resume_data = request.get_json()
+            
+        if not resume_data:
+            return jsonify({
+                'success': False,
+                'error': 'Invalid request body'
+            }), 400
+
+        # Validate JSON data against schema
+        is_valid, error_message = validate_resume_data(resume_data)
+        if not is_valid:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid resume data: {error_message}'
+            }), 400
+
+        # Get theme ID and format from request
+        theme_id = resume_data.get('design', {}).get('theme', 'classic')
+        format = request.args.get('format', 'pdf')
+
+        # Create temporary resume
+        success, result = create_resume_with_rendercv(user_id, resume_data, theme_id)
+        
+        if success:
+            if format == 'pdf':
+                # For PDF format, return the file URL
+                return send_file(
+                    result['pdf_path'],
+                    mimetype='application/pdf',
+                    as_attachment=True,
+                    download_name=f'resume_{user_id}.pdf'
+                )
+            else:
+                # For HTML format, return the rendered HTML content
+                html_file = result.get('html_path')
+                if html_file and os.path.exists(html_file):
+                    with open(html_file, 'r') as f:
+                        html_content = f.read()
+                    return jsonify({
+                        'success': True,
+                        'data': {
+                            'html': html_content
+                        }
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Failed to generate HTML'
+                    }), 500
+        else:
+            return jsonify({
+                'success': False,
+                'error': str(result)
+            }), 500
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error downloading resume: {str(e)}'
+        }), 500
 
 def sanitize_yaml_content(content):
     """Sanitize YAML content to handle markdown links and special characters"""
@@ -130,118 +322,3 @@ def sanitize_yaml_content(content):
             return yaml.safe_load(sanitized_content)
     except Exception as e:
         raise ValueError(f"Failed to sanitize YAML content: {str(e)}")
-
-@builder_bp.route('/resumes/preview', methods=['POST'])
-def preview_resume_endpoint():
-    """Generate HTML preview for a resume using YAML input"""
-    try:
-        if not request.data:
-            return jsonify({
-                'success': False,
-                'error': 'No YAML data provided'
-            }), 400
-
-        # Get the raw YAML content from the request
-        yaml_content = request.data.decode('utf-8')
-        
-        try:
-            # Parse and sanitize YAML
-            resume_data = sanitize_yaml_content(yaml_content)
-            
-            if not resume_data or not isinstance(resume_data, dict):
-                return jsonify({
-                    'success': False,
-                    'error': 'Invalid YAML data. Must be a valid YAML object.'
-                }), 400
-
-            # Get theme ID from the design section if present, otherwise use default
-            theme_id = resume_data.get('design', {}).get('theme', 'classic')
-            
-            # Generate preview
-            success, result = preview_resume(theme_id, yaml.dump(resume_data))
-
-            if success:
-                # Return HTML content directly with proper content type
-                return result['html_content'], 200, {'Content-Type': 'text/html'}
-            else:
-                return jsonify({
-                    'success': False,
-                    'error': str(result)
-                }), 500
-
-        except yaml.YAMLError as e:
-            return jsonify({
-                'success': False,
-                'error': f'Invalid YAML format: {str(e)}'
-            }), 400
-        except ValueError as e:
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 400
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'Error generating preview: {str(e)}'
-        }), 500
-
-@builder_bp.route('/resumes/download', methods=['POST'])
-def download_resume():
-    """Download a responsive PDF resume using YAML input"""
-    try:
-        if not request.data:
-            return jsonify({
-                'success': False,
-                'error': 'No YAML data provided'
-            }), 400
-
-        # Get the raw YAML content from the request
-        yaml_content = request.data.decode('utf-8')
-        
-        try:
-            # Parse and sanitize YAML
-            resume_data = sanitize_yaml_content(yaml_content)
-            
-            if not resume_data or not isinstance(resume_data, dict):
-                return jsonify({
-                    'success': False,
-                    'error': 'Invalid YAML data. Must be a valid YAML object.'
-                }), 400
-
-            # Get theme ID from the design section if present, otherwise use default
-            theme_id = resume_data.get('design', {}).get('theme', 'classic')
-
-            # Create responsive PDF
-            success, result = create_resume_with_rendercv(None, yaml.dump(resume_data), theme_id)
-            
-            if not success:
-                return jsonify({
-                    'success': False,
-                    'error': str(result)
-                }), 500
-
-            # Return the responsive PDF file
-            return send_file(
-                result['pdf_path'],
-                mimetype='application/pdf',
-                as_attachment=True,
-                download_name=f"resume_{theme_id}.pdf"
-            )
-
-        except yaml.YAMLError as e:
-            return jsonify({
-                'success': False,
-                'error': f'Invalid YAML format: {str(e)}'
-            }), 400
-        except ValueError as e:
-            return jsonify({
-                'success': False,
-                'error': str(e)
-            }), 400
-
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'Error generating PDF: {str(e)}'
-        }), 500 
