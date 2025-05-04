@@ -19,6 +19,9 @@ from routes.builder_routes import builder_bp
 # Import database
 from database import init_db, close_db
 
+# Import utilities
+from utils.url import get_public_download_url
+
 # Create Flask app
 app = Flask(__name__, static_folder='static')
 
@@ -85,10 +88,6 @@ def download_public_file(filename):
             'success': False,
             'error': f'Error serving file: {str(e)}'
         }), 500
-
-def get_public_download_url(filename):
-    """Helper function to generate public download URL"""
-    return f"{BASE_URL}/public/download/{filename}"
 
 # Static file routes
 @app.route('/')

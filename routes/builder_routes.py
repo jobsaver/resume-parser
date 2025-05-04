@@ -13,6 +13,7 @@ from controllers.builder_controller import (
     validate_resume_data
 )
 from utils.auth import authenticate_request
+from utils.url import get_public_download_url
 import json
 import yaml
 from pathlib import Path
@@ -135,6 +136,12 @@ def preview_resume_endpoint():
             if html_file and os.path.exists(html_file):
                 with open(html_file, 'r') as f:
                     html_content = f.read()
+                
+                # Generate public download URL for PDF
+                pdf_url = None
+                if pdf_file and os.path.exists(pdf_file):
+                    pdf_url = get_public_download_url(os.path.basename(pdf_file))
+                
                 return jsonify({
                     'success': True,
                     'data': {
@@ -143,7 +150,7 @@ def preview_resume_endpoint():
                         'resume_data': resume_data,
                         'theme_structure': result.get('theme_structure', {}),
                         'template_data': result,
-                        'pdf_url': pdf_file if pdf_file and os.path.exists(pdf_file) else None
+                        'pdf_url': pdf_url
                     }
                 })
             else:
@@ -199,13 +206,17 @@ def create_resume_endpoint():
         success, result = create_resume_with_rendercv(user_id, resume_data, theme_id)
         
         if success:
-            # Include PDF URL in response
+            # Generate public download URL for PDF
             pdf_file = result.get('pdf_path')
+            pdf_url = None
+            if pdf_file and os.path.exists(pdf_file):
+                pdf_url = get_public_download_url(os.path.basename(pdf_file))
+            
             return jsonify({
                 'success': True,
                 'data': {
                     **result,
-                    'pdf_url': pdf_file if pdf_file and os.path.exists(pdf_file) else None
+                    'pdf_url': pdf_url
                 }
             })
         else:
@@ -261,8 +272,8 @@ def download_resume_endpoint():
             html_file = result.get('html_path')
 
             if format == 'pdf' and pdf_file and os.path.exists(pdf_file):
-                # For PDF format, return URL instead of file
-                pdf_url = f"/api/resumes/download/{os.path.basename(pdf_file)}"
+                # For PDF format, return full public download URL
+                pdf_url = get_public_download_url(os.path.basename(pdf_file))
                 return jsonify({
                     'success': True,
                     'data': {
@@ -271,14 +282,20 @@ def download_resume_endpoint():
                     }
                 })
             elif format == 'html' and html_file and os.path.exists(html_file):
-                # For HTML format, return the rendered HTML content
+                # For HTML format, return the rendered HTML content and PDF URL if available
                 with open(html_file, 'r') as f:
                     html_content = f.read()
+                
+                # Generate public download URL for PDF if it exists
+                pdf_url = None
+                if pdf_file and os.path.exists(pdf_file):
+                    pdf_url = get_public_download_url(os.path.basename(pdf_file))
+                
                 return jsonify({
                     'success': True,
                     'data': {
                         'html': html_content,
-                        'pdf_url': pdf_file if pdf_file and os.path.exists(pdf_file) else None
+                        'pdf_url': pdf_url
                     }
                 })
             else:
