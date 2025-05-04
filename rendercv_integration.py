@@ -1,141 +1,116 @@
-"""
-RenderCV integration module for resume rendering.
-This module provides functionality to render resumes using RenderCV.
-"""
+"""RenderCV integration module."""
 import os
-import json
+import uuid
 import tempfile
 from pathlib import Path
-import uuid
-from rendercv.renderer import (
-    create_a_typst_file,
-    create_a_markdown_file,
-    render_pngs_from_typst,
-    render_an_html_from_markdown
+from rendercv.api import (
+    create_a_pdf_from_a_python_dictionary,
+    create_an_html_file_from_a_python_dictionary,
+    create_a_typst_file_from_a_python_dictionary,
+    create_a_markdown_file_from_a_python_dictionary
 )
-from rendercv.data.models import RenderCVDataModel
 import yaml
-from typing import Union, Dict, Any
+import json
 
 class ResumeRenderer:
     def __init__(self):
+        """Initialize the ResumeRenderer."""
         self.temp_dir = Path(tempfile.gettempdir()) / "rendercv-temp"
         self.temp_dir.mkdir(exist_ok=True)
 
-    def render_resume(self, resume_data: Union[str, Dict[str, Any]], theme_id: str = 'classic'):
+    def render_resume(self, resume_data, theme_id='classic'):
         """
-        Render a resume using RenderCV
+        Render a resume using RenderCV.
         
         Args:
-            resume_data (Union[str, dict]): Resume data in YAML format or dictionary to render
-            theme_id (str): Theme identifier
+            resume_data: Dictionary containing resume data
+            theme_id: Theme to use for rendering
             
         Returns:
             tuple: (success, result)
-                - success (bool): Whether the operation was successful
-                - result (dict): Result data or error message
         """
         try:
-            # Convert YAML resume_data to dictionary if it's a string
-            resume_data_dict = yaml.safe_load(resume_data) if isinstance(resume_data, str) else resume_data
-
-            # Validate resume_data structure
-            if 'cv' not in resume_data_dict:
-                return False, {'error': 'Invalid resume_data structure: missing cv section'}
-
-            # Create a unique ID for this resume
+            # Create unique ID for this resume
             resume_id = str(uuid.uuid4())
-            
-            # Create a temporary directory for this resume
-            resume_dir = self.temp_dir / resume_id
-            resume_dir.mkdir(exist_ok=True)
-            
-            # Create a YAML file for RenderCV
-            yaml_file = resume_dir / "resume.yaml"
-            
-            # Convert resume data to RenderCV format
-            rendercv_data = self._convert_to_rendercv_format(resume_data_dict, theme_id)
-            
-            # Ensure rendercv_data is an instance of RenderCVDataModel
-            rendercv_data_model = RenderCVDataModel(**rendercv_data)
-            
-            # Write the YAML file
-            with open(yaml_file, "w") as f:
-                yaml.dump(rendercv_data, f)
-            
-            # Create output directory
-            output_dir = resume_dir / "output"
-            output_dir.mkdir(exist_ok=True)
-            
-            # Generate Typst file
-            typst_file = create_a_typst_file(rendercv_data_model, output_dir)
-            
-            # Generate Markdown file
-            markdown_file = create_a_markdown_file(rendercv_data_model, output_dir)
-            
-            # Generate HTML from Markdown
-            html_file = render_an_html_from_markdown(markdown_file)
-            
-            # Generate PNGs from Typst
-            png_files = render_pngs_from_typst(typst_file)
-            
-            # Return the result
-            return True, {
-                "resume_id": resume_id,
-                "typst_path": str(typst_file),
-                "markdown_path": str(markdown_file),
-                "html_path": str(html_file),
-                "png_paths": [str(png) for png in png_files],
-                "yaml_path": str(yaml_file),
-                "output_dir": str(output_dir)
-            }
-            
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return False, {"error": str(e)}
+            output_dir = self.temp_dir / resume_id / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-    def _convert_to_rendercv_format(self, resume_data: Dict[str, Any], theme_id: str) -> Dict[str, Any]:
+            # Create base filename
+            base_name = f"{resume_data['cv']['name'].replace(' ', '_')}_CV"
+            base_path = output_dir / base_name
+
+            # Generate all formats
+            pdf_path = str(base_path) + ".pdf"
+            html_path = str(base_path) + ".html"
+            typst_path = str(base_path) + ".typ"
+            md_path = str(base_path) + ".md"
+
+            # Render different formats
+            create_a_pdf_from_a_python_dictionary(resume_data, pdf_path)
+            create_an_html_file_from_a_python_dictionary(resume_data, html_path)
+            create_a_typst_file_from_a_python_dictionary(resume_data, typst_path)
+            create_a_markdown_file_from_a_python_dictionary(resume_data, md_path)
+
+            # Check which files were generated
+            result = {
+                'resume_id': resume_id,
+                'output_dir': str(output_dir),
+                'pdf_path': pdf_path if os.path.exists(pdf_path) else None,
+                'html_path': html_path if os.path.exists(html_path) else None,
+                'typst_path': typst_path if os.path.exists(typst_path) else None,
+                'markdown_path': md_path if os.path.exists(md_path) else None,
+                'resume_data': resume_data
+            }
+
+            # Log the generated files for debugging
+            print(f"Generated files for resume {resume_id}:")
+            for key, value in result.items():
+                if key.endswith('_path'):
+                    print(f"- {key}: {value}")
+                    if value and not os.path.exists(value):
+                        print(f"  Warning: File does not exist")
+
+            return True, result
+        except Exception as e:
+            return False, str(e)
+
+    def preview_resume(self, resume_data, theme_id='classic'):
         """
-        Convert resume data to RenderCV format
+        Generate a preview for a resume.
         
         Args:
-            resume_data (dict): Resume data to convert
-            theme_id (str): Theme identifier
+            resume_data: Dictionary containing resume data
+            theme_id: Theme to use for rendering
             
         Returns:
-            dict: RenderCV data model
+            tuple: (success, result)
         """
-        # Extract basic information from cv section
-        cv_data = resume_data.get("cv", {})
-        name = cv_data.get("name", "Unknown")
-        email = cv_data.get("email", "")
-        phone = cv_data.get("phone", "")
-        location = cv_data.get("location", "")
-        website = cv_data.get("website", "")
-        social_networks = cv_data.get("social_networks", [])
-        
-        # Create a basic RenderCV data model
-        rendercv_data = {
-            "design": resume_data.get("design", {"theme": theme_id}),
-            "cv": {
-                "name": name,
-                "email": email,
-                "phone": phone,
-                "location": location,
-                "website": website,
-                "social_networks": social_networks,
-                "sections": {}
-            }
-        }
-        
-        # Add sections from cv.sections
-        sections = cv_data.get("sections", {})
-        for section_name, section_data in sections.items():
-            if isinstance(section_data, list):
-                rendercv_data["cv"]["sections"][section_name] = section_data
-        
-        return rendercv_data
+        try:
+            # Create unique ID for this preview
+            preview_id = str(uuid.uuid4())
+            output_dir = self.temp_dir / preview_id / "output"
+            output_dir.mkdir(parents=True, exist_ok=True)
 
-# Create a global instance
-resume_renderer = ResumeRenderer()
+            # Create base filename
+            base_name = f"{resume_data['cv']['name'].replace(' ', '_')}_CV"
+            base_path = output_dir / base_name
+
+            # Generate HTML and PDF for preview
+            html_path = str(base_path) + ".html"
+            pdf_path = str(base_path) + ".pdf"
+
+            # Render preview formats
+            create_an_html_file_from_a_python_dictionary(resume_data, html_path)
+            create_a_pdf_from_a_python_dictionary(resume_data, pdf_path)
+
+            result = {
+                'resume_id': preview_id,
+                'output_dir': str(output_dir),
+                'html_path': html_path if os.path.exists(html_path) else None,
+                'pdf_path': pdf_path if os.path.exists(pdf_path) else None,
+                'resume_data': resume_data
+            }
+
+            return True, result
+        except Exception as e:
+            return False, str(e)

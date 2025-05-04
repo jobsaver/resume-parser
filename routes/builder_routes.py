@@ -18,6 +18,7 @@ import yaml
 from pathlib import Path
 import re
 import os
+import tempfile
 
 # Create blueprint
 builder_bp = Blueprint('builder', __name__, url_prefix='/api')
@@ -129,6 +130,8 @@ def preview_resume_endpoint():
         if success:
             # Get the HTML content from the HTML file
             html_file = result.get('html_path')
+            pdf_file = result.get('pdf_path')
+            
             if html_file and os.path.exists(html_file):
                 with open(html_file, 'r') as f:
                     html_content = f.read()
@@ -139,7 +142,8 @@ def preview_resume_endpoint():
                         'theme': theme_id,
                         'resume_data': resume_data,
                         'theme_structure': result.get('theme_structure', {}),
-                        'template_data': result
+                        'template_data': result,
+                        'pdf_url': pdf_file if pdf_file and os.path.exists(pdf_file) else None
                     }
                 })
             else:
@@ -172,7 +176,6 @@ def create_resume_endpoint():
 
         # Get user ID from authentication
         user_id = request.user_id
-        
         resume_data = request.get_json()
             
         if not resume_data or not isinstance(resume_data, dict):
@@ -196,9 +199,14 @@ def create_resume_endpoint():
         success, result = create_resume_with_rendercv(user_id, resume_data, theme_id)
         
         if success:
+            # Include PDF URL in response
+            pdf_file = result.get('pdf_path')
             return jsonify({
                 'success': True,
-                'data': result
+                'data': {
+                    **result,
+                    'pdf_url': pdf_file if pdf_file and os.path.exists(pdf_file) else None
+                }
             })
         else:
             return jsonify({
@@ -249,31 +257,35 @@ def download_resume_endpoint():
         success, result = create_resume_with_rendercv(user_id, resume_data, theme_id)
         
         if success:
-            if format == 'pdf':
-                # For PDF format, return the file URL
-                return send_file(
-                    result['pdf_path'],
-                    mimetype='application/pdf',
-                    as_attachment=True,
-                    download_name=f'resume_{user_id}.pdf'
-                )
-            else:
+            pdf_file = result.get('pdf_path')
+            html_file = result.get('html_path')
+
+            if format == 'pdf' and pdf_file and os.path.exists(pdf_file):
+                # For PDF format, return URL instead of file
+                pdf_url = f"/api/resumes/download/{os.path.basename(pdf_file)}"
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'pdf_url': pdf_url,
+                        'file_url': pdf_url
+                    }
+                })
+            elif format == 'html' and html_file and os.path.exists(html_file):
                 # For HTML format, return the rendered HTML content
-                html_file = result.get('html_path')
-                if html_file and os.path.exists(html_file):
-                    with open(html_file, 'r') as f:
-                        html_content = f.read()
-                    return jsonify({
-                        'success': True,
-                        'data': {
-                            'html': html_content
-                        }
-                    })
-                else:
-                    return jsonify({
-                        'success': False,
-                        'error': 'Failed to generate HTML'
-                    }), 500
+                with open(html_file, 'r') as f:
+                    html_content = f.read()
+                return jsonify({
+                    'success': True,
+                    'data': {
+                        'html': html_content,
+                        'pdf_url': pdf_file if pdf_file and os.path.exists(pdf_file) else None
+                    }
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': f'Failed to generate {format.upper()} file'
+                }), 500
         else:
             return jsonify({
                 'success': False,
@@ -284,6 +296,39 @@ def download_resume_endpoint():
         return jsonify({
             'success': False,
             'error': f'Error downloading resume: {str(e)}'
+        }), 500
+
+@builder_bp.route('/resumes/download/<filename>', methods=['GET'])
+def serve_resume_file(filename):
+    """Serve a generated resume file"""
+    try:
+        # Get the file from temp directory
+        temp_dir = Path(tempfile.gettempdir()) / "rendercv-temp"
+        file_path = None
+        
+        # Search for the file in subdirectories
+        for root, dirs, files in os.walk(temp_dir):
+            if filename in files:
+                file_path = Path(root) / filename
+                break
+        
+        if file_path and os.path.exists(file_path):
+            return send_file(
+                file_path,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=filename
+            )
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error serving file: {str(e)}'
         }), 500
 
 def sanitize_yaml_content(content):

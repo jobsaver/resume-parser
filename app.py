@@ -3,7 +3,7 @@ Main application module.
 """
 import os
 from pathlib import Path
-from flask import Flask, send_from_directory, jsonify
+from flask import Flask, send_from_directory, jsonify, url_for, request, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 import atexit
@@ -28,6 +28,7 @@ CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS
 # Configuration
 PORT = int(os.getenv("PORT", 5002))
 DEBUG = os.getenv("DEBUG", "True").lower() == "true"
+BASE_URL = os.getenv("BASE_URL", f"http://localhost:{PORT}")
 
 # Configure maximum file size (10MB)
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024
@@ -45,6 +46,49 @@ init_db()
 
 # Register function to close database connection on application exit
 atexit.register(close_db)
+
+# Public download route
+@app.route('/public/download/<path:filename>')
+def download_public_file(filename):
+    """Serve public download files"""
+    try:
+        # Get file from temp directory
+        temp_dir = Path(tempfile.gettempdir())
+        
+        # First check resume-uploads directory
+        file_path = temp_dir / "resume-uploads" / filename
+        if not file_path.exists():
+            # Then check rendercv-temp directory
+            file_path = temp_dir / "rendercv-temp" / filename
+            if not file_path.exists():
+                # Search in subdirectories
+                for root, _, files in os.walk(temp_dir / "rendercv-temp"):
+                    if filename in files:
+                        file_path = Path(root) / filename
+                        break
+        
+        if file_path.exists():
+            return send_file(
+                file_path,
+                mimetype='application/pdf',
+                as_attachment=True,
+                download_name=filename
+            )
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'File not found'
+            }), 404
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Error serving file: {str(e)}'
+        }), 500
+
+def get_public_download_url(filename):
+    """Helper function to generate public download URL"""
+    return f"{BASE_URL}/public/download/{filename}"
 
 # Static file routes
 @app.route('/')
@@ -122,4 +166,4 @@ if __name__ == '__main__':
     print(f"Starting Python resume parser server on port {PORT}...")
     print(f"Debug mode: {DEBUG}")
     print(f"Upload directory: {UPLOAD_FOLDER}")
-    app.run(host=os.getenv('HOST', '0.0.0.0'), port=PORT, debug=DEBUG) 
+    app.run(host=os.getenv('HOST', '0.0.0.0'), port=PORT, debug=DEBUG)

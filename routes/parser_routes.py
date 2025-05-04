@@ -1,9 +1,9 @@
 """
 Routes for resume parsing functionality.
 """
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, send_file
 from controllers.parser_controller import extract_resume, save_resume, download_resume
-from utils.auth import authenticate_request
+import os
 
 # Create blueprint
 parser_bp = Blueprint('parser', __name__, url_prefix='/api')
@@ -84,15 +84,14 @@ def save_resume_endpoint():
 
 @parser_bp.route('/download-resume/<resume_id>', methods=['GET'])
 def download_resume_endpoint(resume_id):
-    """Download a resume PDF"""
-    # Authenticate request
-    user_id, token, error_response = authenticate_request()
-    if error_response:
-        return error_response
+    """Get resume PDF URL"""
+    # Get user ID from request
+    user_id = request.args.get('user_id', 'anonymous')
     
     success, result = download_resume(user_id, resume_id)
     
     if success:
+        # Always return URL response instead of sending file
         return jsonify({
             'success': True,
             'data': result
@@ -100,5 +99,5 @@ def download_resume_endpoint(resume_id):
     else:
         return jsonify({
             'success': False,
-            'error': result
-        }), 404 
+            'error': str(result)
+        }), 404

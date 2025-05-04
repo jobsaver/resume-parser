@@ -7,7 +7,8 @@ import time
 import uuid
 from pathlib import Path
 import tempfile
-from flask import jsonify
+from flask import jsonify, current_app, request
+from urllib.parse import urljoin
 from parsers.pdf_extractor import extract_text_from_pdf
 from parsers.resume_parser import parse_resume
 from database import get_user_resumes, delete_user_resumes, save_resume_document
@@ -16,6 +17,14 @@ from storage import upload_file_to_spaces, generate_spaces_key, delete_file_from
 # Configure upload folder
 UPLOAD_FOLDER = Path(tempfile.gettempdir()) / "resume-uploads"
 UPLOAD_FOLDER.mkdir(exist_ok=True)
+
+def get_pdf_url(file_path, resume_id):
+    """Helper function to generate PDF URL"""
+    if os.path.isabs(file_path):
+        # For local files, generate a URL using the download endpoint
+        base_url = request.host_url.rstrip('/')
+        return f"{base_url}/api/download-resume/{resume_id}"
+    return file_path  # Return as is if it's already a URL
 
 def extract_resume(file):
     """
@@ -41,43 +50,42 @@ def extract_resume(file):
         # Create a resume_id
         temp_resume_id = f"temp_{int(time.time())}_{str(uuid.uuid4())[:8]}"
         
+        # Generate PDF URL
+        pdf_url = get_pdf_url(str(temp_file_path), temp_resume_id)
+        
         # Create the response
         result = {
             'resume_id': temp_resume_id,
             'user_id': 'anonymous',
             'content': parsed_data,
             'format': 'standard',
-            'file_url': '',
-            'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content
+            'file_url': pdf_url,
+            'pdf_url': pdf_url,  # Add consistent pdf_url field
+            'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content,
+            'success': True
         }
-        
-        # Remove the temporary file
-        temp_file_path.unlink(missing_ok=True)
         
         return True, result
         
     except Exception as e:
-        # Remove the temporary file if it exists
+        # Clean up temp file in case of error
         if 'temp_file_path' in locals():
             temp_file_path.unlink(missing_ok=True)
         return False, str(e)
 
 def save_resume(file, user_id, resume_format='standard'):
     """
-    Save resume data to database and storage
+    Save resume data and file
     
     Args:
         file: The uploaded file object
         user_id: User ID
-        resume_format: Format of the resume
+        resume_format: Resume format (optional)
         
     Returns:
         tuple: (success, result)
     """
     try:
-        # Generate resume ID
-        resume_id = f"{user_id}_{int(time.time())}_{str(uuid.uuid4())[:8]}"
-        
         # Save the file temporarily
         temp_file_path = UPLOAD_FOLDER / file.filename
         file.save(temp_file_path)
@@ -88,15 +96,17 @@ def save_resume(file, user_id, resume_format='standard'):
         # Parse the resume
         parsed_data = parse_resume(temp_file_path, text_content)
         
-        # Get user's existing resumes
-        existing_resumes = get_user_resumes(user_id)
+        # Create a resume_id
+        resume_id = str(uuid.uuid4())
         
-        # Delete existing resumes if any
+        # Delete existing resumes for this user if any
+        existing_resumes = get_user_resumes(user_id)
         if existing_resumes:
             # Delete from storage
             for resume in existing_resumes:
-                if resume.get('url'):
-                    url_parts = resume['url'].split('/')
+                url = resume.get('url')
+                if url:
+                    url_parts = url.split('/')
                     if len(url_parts) >= 4:
                         object_key = '/'.join(url_parts[3:])
                         delete_file_from_spaces(object_key)
@@ -112,7 +122,7 @@ def save_resume(file, user_id, resume_format='standard'):
             raise Exception(f'Error uploading file to storage: {spaces_result}')
         
         # Store the file URL
-        file_url = spaces_result
+        file_url = spaces_result if upload_success else get_pdf_url(str(temp_file_path), resume_id)
         
         # Create document
         document = {
@@ -130,35 +140,25 @@ def save_resume(file, user_id, resume_format='standard'):
         result = {
             'resume_id': saved_id,
             'user_id': user_id,
-            'content': {
-                'name': parsed_data.get('name', ''),
-                'email': parsed_data.get('email', ''),
-                'phone': parsed_data.get('phone', ''),
-                'skills': parsed_data.get('skills', []),
-                'education': parsed_data.get('education', []),
-                'experience': parsed_data.get('experience', []),
-                'certifications': parsed_data.get('certifications', []),
-                'raw_content': parsed_data.get('raw_content', '')
-            },
+            'content': parsed_data,
             'format': resume_format,
             'file_url': file_url,
-            'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content
+            'pdf_url': file_url,  # Add consistent pdf_url field
+            'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content,
+            'success': True
         }
-        
-        # Remove the temporary file
-        temp_file_path.unlink(missing_ok=True)
         
         return True, result
         
     except Exception as e:
-        # Remove the temporary file if it exists
+        # Clean up temp file in case of error
         if 'temp_file_path' in locals():
             temp_file_path.unlink(missing_ok=True)
         return False, str(e)
 
 def download_resume(user_id, resume_id):
     """
-    Get download URL for a resume
+    Get download URL or path for a resume
     
     Args:
         user_id: User ID
@@ -181,13 +181,20 @@ def download_resume(user_id, resume_id):
         if not resume:
             return False, f'Resume with ID {resume_id} not found'
         
-        # Get the file URL
+        # Get the file URL 
         file_url = resume.get('url')
-        
         if not file_url:
             return False, f'No file URL found for resume with ID {resume_id}'
+            
+        # Generate PDF URL if needed
+        pdf_url = get_pdf_url(file_url, resume_id)
         
-        return True, {'file_url': file_url}
+        return True, {
+            'success': True,
+            'file_url': pdf_url,
+            'pdf_url': pdf_url,  # Add consistent pdf_url field
+            'resume_id': resume_id
+        }
         
     except Exception as e:
-        return False, str(e) 
+        return False, str(e)
