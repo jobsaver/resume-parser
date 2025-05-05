@@ -1,0 +1,107 @@
+{
+  "personalInfo": {
+    "name": "John Doe",
+    "location": "San Francisco, CA",
+    "email": "john.doe@example.com",
+    "phone": "+1-609-999-9995",
+    "socialNetworks": [
+      {
+        "network": "LinkedIn",
+        "username": "john.doe"
+      },
+      {
+        "network": "GitHub",
+        "username": "john.doe"
+      }
+    ]
+  },
+  "sections": {
+    "profile": [
+      "A passionate software engineer with expertise in building scalable applications and leading development teams."
+    ],
+    "experience": [
+      {
+        "company": "Tech Solutions Inc",
+        "position": "Senior Software Engineer",
+        "startDate": "2022-01",
+        "endDate": "present",
+        "location": "San Francisco, CA",
+        "summary": "Led development of cloud-native applications",
+        "highlights": [
+          "Architected and implemented microservices architecture reducing system latency by 40%",
+          "Managed a team of 5 developers and improved sprint velocity by 25%",
+          "Implemented CI/CD pipelines reducing deployment time by 60%"
+        ]
+      }
+    ],
+    "education": [
+      {
+        "institution": "Stanford University",
+        "area": "Computer Science",
+        "degree": "MS",
+        "startDate": "2020-09",
+        "endDate": "2022-05",
+        "location": "Stanford, CA",
+        "highlights": [
+          "GPA: 3.92/4.0",
+          "Research Focus: Distributed Systems and Cloud Computing"
+        ]
+      }
+    ],
+    "skills": [
+      {
+        "label": "Technologies",
+        "details": "Python, JavaScript, React, Node.js, Docker, Kubernetes, AWS"
+      },
+      {
+        "label": "Tools",
+        "details": "Git, Jenkins, Terraform, Prometheus, Grafana"
+      },
+      {
+        "label": "Soft Skills",
+        "details": "Team Leadership, Project Management, Technical Writing"
+      }
+    ],
+    "certifications": [
+      {
+        "name": "AWS Solutions Architect Professional",
+        "date": "2024",
+        "issuer": "Amazon Web Services"
+      },
+      {
+        "name": "Certified Kubernetes Administrator",
+        "date": "2023",
+        "issuer": "Cloud Native Computing Foundation"
+      }
+    ],
+    "projects": [
+      {
+        "name": "Cloud Cost Optimization Platform",
+        "startDate": "2023-06",
+        "endDate": "present",
+        "summary": "Developed an AI-powered cloud cost optimization platform",
+        "highlights": [
+          "Reduced cloud costs by 30% for enterprise clients",
+          "Implemented machine learning models for resource prediction",
+          "Open-source project with 2000+ GitHub stars"
+        ]
+      }
+    ]
+  },
+  "design": {
+    "theme": "modern",
+    "colors": {
+      "primary": "rgb(41, 128, 185)",
+      "secondary": "rgb(44, 62, 80)",
+      "text": "rgb(33, 33, 33)"
+    },
+    "fonts": {
+      "main": "Roboto",
+      "headings": "Roboto"
+    },
+    "spacing": {
+      "margin": "1.8cm",
+      "lineHeight": "0.65em"
+    }
+  }
+}

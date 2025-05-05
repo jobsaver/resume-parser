@@ -1,0 +1,113 @@
+cv:
+  name: John Doe
+  location: Location
+  email: john.doe@example.com
+  phone: +1-609-999-9995
+  website:
+  social_networks:
+    - network: LinkedIn
+      username: john.doe
+    - network: GitHub
+      username: john.doe
+  sections:
+    summary:
+      - Senior technology professional with over 8 years of experience in software development and team leadership.
+        Proven track record of delivering high-impact projects and driving innovation in cloud computing and distributed systems.
+    professional_experience:
+      - company: Amazon Web Services
+        position: Technical Lead
+        date:
+        start_date: 2021-03
+        end_date: present
+        location: Seattle, WA
+        summary: Leading development of cloud infrastructure services
+        highlights:
+          - Led a team of 12 engineers across 3 time zones, delivering critical cloud infrastructure components
+          - Architected and implemented auto-scaling solutions handling 1M+ requests per second
+          - Reduced operational costs by 45% through infrastructure optimization
+      - company: Microsoft
+        position: Senior Software Engineer
+        date:
+        start_date: 2018-06
+        end_date: 2021-02
+        location: Redmond, WA
+        summary: Core developer for Azure Cloud Services
+        highlights:
+          - Developed high-availability components for Azure Cloud Platform
+          - Implemented disaster recovery systems with 99.99% uptime
+          - Mentored 5 junior developers and led technical training programs
+    education:
+      - institution: Massachusetts Institute of Technology
+        area: Computer Science
+        degree: BS
+        start_date: 2014-09
+        end_date: 2018-05
+        location: Cambridge, MA
+        summary:
+        highlights:
+          - 'Major: Computer Science and Engineering'
+          - 'Minor: Business Management'
+          - 'GPA: 3.95/4.0'
+    technical_skills:
+      - label: Programming Languages
+        details: Java, Python, C++, JavaScript, TypeScript
+      - label: Cloud & DevOps
+        details: AWS, Azure, Docker, Kubernetes, Terraform
+      - label: Databases
+        details: PostgreSQL, MongoDB, Redis, Elasticsearch
+    achievements:
+      - Patent holder for "Distributed System Load Balancing" (US Patent 12345678)
+      - AWS Community Builder 2024
+      - Speaker at KubeCon North America 2024
+    certifications:
+      - name: Google Cloud Professional Architect
+        date: 2024
+        issuer: Google Cloud
+      - name: Microsoft Azure Solutions Expert
+        date: 2023
+        issuer: Microsoft
+
+design:
+  theme: professional
+  page:
+    size: us-letter
+    margins: 2cm
+    show_page_numbering: true
+    show_last_updated_date: true
+  colors:
+    text: rgb(51, 51, 51)
+    name: rgb(0, 66, 99)
+    section_titles: rgb(0, 66, 99)
+    links: rgb(0, 102, 153)
+    highlights: rgb(68, 68, 68)
+  text:
+    font_family: Calibri
+    font_size: 11pt
+    leading: 0.7em
+    alignment: justified
+  header:
+    name_font_size: 28pt
+    name_bold: true
+    use_icons_for_connections: false
+    alignment: center
+    style: minimal
+  section_titles:
+    type: classic-line
+    font_size: 1.2em
+    bold: true
+    small_caps: true
+    margin_top: 0.7cm
+    margin_bottom: 0.3cm
+  entries:
+    date_format: long
+    use_bullet_points: true
+    bullet_style: diamond
+
+locale:
+  language: en
+  date_format: MMMM YYYY
+  present: Present
+
+rendercv_settings:
+  date: '2025-03-01'
+  bold_keywords: []
