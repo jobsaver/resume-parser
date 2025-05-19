@@ -75,7 +75,10 @@ def parse_resume_endpoint():
         # Delete temporary file
         temp_file_path.unlink(missing_ok=True)
         
-        # Return parsed data
+        # Add raw content to parsed data
+        parsed_data['raw_content'] = text_content
+        
+        # Return simplified response format
         return jsonify({
             'success': True,
             'data': {
