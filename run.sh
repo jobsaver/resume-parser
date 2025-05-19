@@ -41,10 +41,8 @@ echo "Verifying critical dependencies..."
 python -c "
 try:
     import flask
-    import pymongo
     import PyPDF2
     import nltk
-    import dotenv
     print('All critical packages verified.')
 except ImportError as e:
     print(f'Error: {e}')
@@ -88,32 +86,6 @@ if ! command -v tesseract &> /dev/null; then
     echo "  - Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki"
 fi
 
-# Create .env file if it doesn't exist
-if [ ! -f ".env" ]; then
-    echo "Creating .env file from example..."
-    cp .env.example .env
-    
-    # Make sure MongoDB URI is set
-    if grep -q "MONGO_URI=" .env; then
-        echo "MongoDB URI is set in .env file."
-    else
-        echo "WARNING: MongoDB URI is not set in .env file. Please add it manually."
-    fi
-fi
-
-# Test MongoDB connection
-echo "Testing MongoDB connection..."
-python -c "
-try:
-    from database import init_db, close_db
-    success = init_db()
-    print('Connection successful' if success else 'Connection failed')
-    close_db()
-except Exception as e:
-    print(f'Error testing MongoDB connection: {e}')
-    print('Continue anyway? MongoDB storage functionality may be limited.')
-"
-
 # Run the server
 echo "Starting Python Resume Parser server..."
-python app.py 
+python app.py
