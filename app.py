@@ -83,7 +83,7 @@ def parse_resume_endpoint():
             'success': True,
             'data': {
                 'content': parsed_data,
-                'textContent': text_content[:1000] + '...' if len(text_content) > 1000 else text_content
+                'textContent': text_content  # Return full text content without truncation
             }
         })
         
