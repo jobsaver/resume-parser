@@ -25,6 +25,9 @@ def main():
     try:
         print(f"Extracting text from {pdf_path}...")
         text_content = extract_text_from_pdf(pdf_path)
+        if not text_content:
+            print("Error: Failed to extract text from PDF")
+            return
         
         if args.verbose:
             print("\n--- Extracted Text ---")
@@ -37,7 +40,10 @@ def main():
         parsed_data = parse_resume(pdf_path, text_content)
         
         print("\n--- Parsed Resume Data ---")
-        print(json.dumps(parsed_data, indent=2))
+        print(json.dumps(parsed_data, indent=4))
+        with open('output.json', 'w', encoding='utf-8') as f:
+            json.dump(parsed_data, f, ensure_ascii=False, indent=4)
+        print("\nOutput saved to output.json")
         print("---------------------------")
         
     except Exception as e:

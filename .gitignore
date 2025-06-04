@@ -44,3 +44,13 @@ Thumbs.db
 
 # Log files
 *.log 
+
+output.json
+*.pdf
+.env 
+.env.example
+
+curl -X POST \
+  -H "Authorization: Bearer b23ebd32uiedb3uibd3" \
+  -F "resume=C:\Users\Ubaid Abbas\Documents\GitHub\resume-parser\Resume.pdf" \
+  http://localhost:5002/api/parse

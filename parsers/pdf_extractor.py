@@ -5,6 +5,8 @@ and combines them for the best possible result.
 """
 import os
 import re
+import fitz
+import docx
 import shutil
 from pathlib import Path
 import PyPDF2
@@ -27,54 +29,83 @@ try:
 except ImportError:
     print("Warning: OCR libraries not installed. OCR functionality disabled.")
 
-def extract_text_from_pdf(pdf_path):
-    """
-    Extract text from a PDF file using multiple methods and return the best result.
+def extract_text_from_pdf(path):
+    text = ""
+    try:
+        doc = fitz.open(path)
+        for page in doc:
+            text += page.get_text()
+    except Exception as e:
+        print(f"[!] Error reading PDF: {e}")
+    return text
+
+def extract_text_from_docx(path):
+    text = ""
+    try:
+        doc = docx.Document(path)
+        for para in doc.paragraphs:
+            text += para.text + "\n"
+    except Exception as e:
+        print(f"[!] Error reading DOCX: {e}")
+    return text
+
+def extract_text(file_path):
+    ext = os.path.splitext(file_path)[-1].lower()
+    if ext == ".pdf":
+        return extract_text_from_pdf(file_path)
+    elif ext == ".docx":
+        return extract_text_from_docx(file_path)
+    else:
+        raise ValueError("Unsupported file format. Only PDF and DOCX are supported.")
+
+# def extract_text_from_pdf(pdf_path):
+#     """
+#     Extract text from a PDF file using multiple methods and return the best result.
     
-    Args:
-        pdf_path (str or Path): Path to the PDF file
+#     Args:
+#         pdf_path (str or Path): Path to the PDF file
         
-    Returns:
-        str: Extracted text content
-    """
-    pdf_path = Path(pdf_path)
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+#     Returns:
+#         str: Extracted text content
+#     """
+#     pdf_path = Path(pdf_path)
+#     if not pdf_path.exists():
+#         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
     
-    # Method 1: PyPDF2
-    pypdf2_text = extract_with_pypdf2(pdf_path)
+#     # Method 1: PyPDF2
+#     pypdf2_text = extract_with_pypdf2(pdf_path)
     
-    # Method 2: pdfminer.six
-    pdfminer_text = extract_with_pdfminer(pdf_path)
+#     # Method 2: pdfminer.six
+#     pdfminer_text = extract_with_pdfminer(pdf_path)
     
-    # If text methods didn't extract much content, try OCR if available
-    texts = [
-        (pypdf2_text, len(pypdf2_text), "PyPDF2"),
-        (pdfminer_text, len(pdfminer_text), "pdfminer.six")
-    ]
+#     # If text methods didn't extract much content, try OCR if available
+#     texts = [
+#         (pypdf2_text, len(pypdf2_text), "PyPDF2"),
+#         (pdfminer_text, len(pdfminer_text), "pdfminer.six")
+#     ]
     
-    if max(len(pypdf2_text), len(pdfminer_text)) < 100 and OCR_AVAILABLE:
-        print("Text extraction methods yielded little content. Trying OCR...")
-        ocr_text = extract_with_ocr(pdf_path)
-        texts.append((ocr_text, len(ocr_text), "OCR"))
-    elif max(len(pypdf2_text), len(pdfminer_text)) < 100:
-        print("Warning: This appears to be an image-based PDF, but OCR is not available.")
-        print("Install Tesseract OCR and required Python packages for better results.")
+#     if max(len(pypdf2_text), len(pdfminer_text)) < 100 and OCR_AVAILABLE:
+#         print("Text extraction methods yielded little content. Trying OCR...")
+#         ocr_text = extract_with_ocr(pdf_path)
+#         texts.append((ocr_text, len(ocr_text), "OCR"))
+#     elif max(len(pypdf2_text), len(pdfminer_text)) < 100:
+#         print("Warning: This appears to be an image-based PDF, but OCR is not available.")
+#         print("Install Tesseract OCR and required Python packages for better results.")
     
-    # Sort by text length in descending order
-    texts.sort(key=lambda x: x[1], reverse=True)
+#     # Sort by text length in descending order
+#     texts.sort(key=lambda x: x[1], reverse=True)
     
-    # Log the extraction results
-    for text, length, method in texts:
-        print(f"{method} extracted {length} characters")
+#     # Log the extraction results
+#     for text, length, method in texts:
+#         print(f"{method} extracted {length} characters")
     
-    # Use the text with the most content
-    best_text = texts[0][0]
+#     # Use the text with the most content
+#     best_text = texts[0][0]
     
-    # Clean up the text
-    cleaned_text = clean_text(best_text)
+#     # Clean up the text
+#     cleaned_text = clean_text(best_text)
     
-    return cleaned_text
+#     return cleaned_text
 
 def extract_with_pypdf2(pdf_path):
     """Extract text from PDF using PyPDF2"""

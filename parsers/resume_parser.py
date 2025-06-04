@@ -4,6 +4,7 @@ This module provides functionality to extract structured information from resume
 """
 import os
 import re
+import sys
 import nltk
 import string
 from pathlib import Path
@@ -23,6 +24,17 @@ from nltk.corpus import stopwords
 from nltk import pos_tag, ne_chunk
 from nltk.tree import Tree
 from nltk.util import ngrams
+
+curr_dir = Path(__file__).parent.resolve()
+sys.path.append(str(curr_dir))
+from pdf_extractor import extract_text
+from section_detector import extract_sections
+from data_parser import (
+    get_all_skills, 
+    extract_contact_info, 
+    structure_experience_spacy, 
+    structure_projects
+)
 
 # Try to import sklearn for text clustering, but don't fail if not available
 try:
@@ -72,147 +84,167 @@ def parse_resume(pdf_path, text_content=None):
     if not pdf_path.exists() and not text_content:
         raise FileNotFoundError(f"PDF file not found: {pdf_path}")
     
+    resume_text = extract_text(pdf_path)
+    data = extract_sections(resume_text)
+    data["full_text_content"] = resume_text
+    skills = get_all_skills(data.get("skills", ""))
+    if skills:
+        data["skills"] = skills
+    contact_info = data.get("contact", "")
+    contact = extract_contact_info(contact_info)
+    if contact:
+        data["contact"] = contact
+    exp = data.get("experience", "")
+    experience = structure_experience_spacy(exp)
+    if experience:
+        data["experience"] = experience
+    proj = data.get("projects", "")
+    projects = structure_projects(proj)
+    if projects:
+        data["projects"] = projects
+
+    return data
+
     # Use provided text content or handle as empty
-    if text_content is None:
-        text_content = ""
-        print("No text content provided, using fallback empty string")
+    # if text_content is None:
+    #     text_content = ""
+    #     print("No text content provided, using fallback empty string")
     
     # Extract only basic information from text
-    data = {}
     
-    # Extract name
-    name_pattern = r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)'
-    name_match = re.search(name_pattern, text_content.strip())
-    if name_match:
-        data['name'] = name_match.group(1).strip()
-    else:
-        # Try to extract name using NLTK NER
-        try:
-            first_paragraph = text_content.split('\n\n')[0]
-            tokens = word_tokenize(first_paragraph)
-            tagged = pos_tag(tokens)
-            entities = ne_chunk(tagged)
+    # # Extract name
+    # name_pattern = r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)'
+    # name_match = re.search(name_pattern, text_content.strip())
+    # if name_match:
+    #     data['name'] = name_match.group(1).strip()
+    # else:
+    #     # Try to extract name using NLTK NER
+    #     try:
+    #         first_paragraph = text_content.split('\n\n')[0]
+    #         tokens = word_tokenize(first_paragraph)
+    #         tagged = pos_tag(tokens)
+    #         entities = ne_chunk(tagged)
             
-            names = []
-            for chunk in entities:
-                if hasattr(chunk, 'label') and chunk.label() == 'PERSON':
-                    names.append(' '.join(c[0] for c in chunk))
+    #         names = []
+    #         for chunk in entities:
+    #             if hasattr(chunk, 'label') and chunk.label() == 'PERSON':
+    #                 names.append(' '.join(c[0] for c in chunk))
             
-            if names:
-                data['name'] = names[0]
-        except Exception as e:
-            print(f"Name extraction failed: {str(e)}")
+    #         if names:
+    #             data['name'] = names[0]
+    #     except Exception as e:
+    #         print(f"Name extraction failed: {str(e)}")
     
-    # Extract email
-    email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-    email_match = re.search(email_pattern, text_content)
-    if email_match:
-        data['email'] = email_match.group(0)
+    # # Extract email
+    # email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    # email_match = re.search(email_pattern, text_content)
+    # if email_match:
+    #     data['email'] = email_match.group(0)
     
-    # Extract phone number
-    phone_pattern = r'(?:\+\d{1,3}[-\.\s]?)?\(?\d{3}\)?[-\.\s]?\d{3}[-\.\s]?\d{4}|\b\d{3}[-\.\s]?\d{3}[-\.\s]?\d{4}\b'
-    phone_match = re.search(phone_pattern, text_content)
-    if phone_match:
-        data['phone'] = phone_match.group(0)
+    # # Extract phone number
+    # phone_pattern = r'(?:\+\d{1,3}[-\.\s]?)?\(?\d{3}\)?[-\.\s]?\d{3}[-\.\s]?\d{4}|\b\d{3}[-\.\s]?\d{3}[-\.\s]?\d{4}\b'
+    # phone_match = re.search(phone_pattern, text_content)
+    # if phone_match:
+    #     data['phone'] = phone_match.group(0)
     
-    # Extract skills using spaCy if available
-    skills = []
-    if 'SPACY_AVAILABLE' in globals() and SPACY_AVAILABLE:
-        try:
-            doc = nlp(text_content)
+    # # Extract skills using spaCy if available
+    # skills = []
+    # if 'SPACY_AVAILABLE' in globals() and SPACY_AVAILABLE:
+    #     try:
+    #         doc = nlp(text_content)
             
-            # Extract noun phrases as potential skills
-            for chunk in doc.noun_chunks:
-                # Filter out common non-skill noun phrases (like "I", "me", etc.)
-                if len(chunk.text.strip()) > 2 and not chunk.text.lower() in ['i', 'me', 'my', 'mine', 'myself', 'we', 'us', 'our']:
-                    skills.append(chunk.text.strip())
+    #         # Extract noun phrases as potential skills
+    #         for chunk in doc.noun_chunks:
+    #             # Filter out common non-skill noun phrases (like "I", "me", etc.)
+    #             if len(chunk.text.strip()) > 2 and not chunk.text.lower() in ['i', 'me', 'my', 'mine', 'myself', 'we', 'us', 'our']:
+    #                 skills.append(chunk.text.strip())
             
-            # Extract technical terms (proper nouns and nouns that could be skills)
-            for token in doc:
-                if token.pos_ in ['NOUN', 'PROPN'] and len(token.text) > 2:
-                    if token.text.strip() not in skills and not token.text.lower() in ['i', 'me', 'my', 'mine', 'myself', 'we', 'us', 'our']:
-                        skills.append(token.text.strip())
+    #         # Extract technical terms (proper nouns and nouns that could be skills)
+    #         for token in doc:
+    #             if token.pos_ in ['NOUN', 'PROPN'] and len(token.text) > 2:
+    #                 if token.text.strip() not in skills and not token.text.lower() in ['i', 'me', 'my', 'mine', 'myself', 'we', 'us', 'our']:
+    #                     skills.append(token.text.strip())
             
-            # Clean and deduplicate skills
-            cleaned_skills = []
-            for skill in skills:
-                # Normalize skill text
-                clean_skill = re.sub(r'\s+', ' ', skill).strip()
-                if clean_skill and clean_skill.lower() not in [s.lower() for s in cleaned_skills]:
-                    cleaned_skills.append(clean_skill)
+    #         # Clean and deduplicate skills
+    #         cleaned_skills = []
+    #         for skill in skills:
+    #             # Normalize skill text
+    #             clean_skill = re.sub(r'\s+', ' ', skill).strip()
+    #             if clean_skill and clean_skill.lower() not in [s.lower() for s in cleaned_skills]:
+    #                 cleaned_skills.append(clean_skill)
             
-            data['skills'] = cleaned_skills
-        except Exception as e:
-            print(f"spaCy skill extraction failed: {str(e)}")
+    #         data['skills'] = cleaned_skills
+    #     except Exception as e:
+    #         print(f"spaCy skill extraction failed: {str(e)}")
     
-    # If spaCy is not available, use regex to find skills
-    if 'skills' not in data or not data['skills']:
-        # Look for skills based on linguistic patterns
-        skills_pattern = r'(?:proficient in|experienced with|knowledge of|skilled in|expertise in|familiar with|competent in)\s+((?:[A-Za-z0-9#+.\-]+(?:\s+and\s+|\s*,\s*|\s+)?)+)'
-        skills_matches = re.finditer(skills_pattern, text_content, re.IGNORECASE)
+    # # If spaCy is not available, use regex to find skills
+    # if 'skills' not in data or not data['skills']:
+    #     # Look for skills based on linguistic patterns
+    #     skills_pattern = r'(?:proficient in|experienced with|knowledge of|skilled in|expertise in|familiar with|competent in)\s+((?:[A-Za-z0-9#+.\-]+(?:\s+and\s+|\s*,\s*|\s+)?)+)'
+    #     skills_matches = re.finditer(skills_pattern, text_content, re.IGNORECASE)
         
-        # Extract skills from matches
-        all_skills = []
-        for match in skills_matches:
-            skill_text = match.group(1).strip()
-            # Split by common separators
-            for skill in re.split(r'\s*(?:,|\band\b)\s*', skill_text):
-                if skill and len(skill) > 2:  # Avoid very short "skills"
-                    all_skills.append(skill.strip())
+    #     # Extract skills from matches
+    #     all_skills = []
+    #     for match in skills_matches:
+    #         skill_text = match.group(1).strip()
+    #         # Split by common separators
+    #         for skill in re.split(r'\s*(?:,|\band\b)\s*', skill_text):
+    #             if skill and len(skill) > 2:  # Avoid very short "skills"
+    #                 all_skills.append(skill.strip())
         
-        data['skills'] = list(set(all_skills))
+    #     data['skills'] = list(set(all_skills))
     
-    # Extract education, experience and certifications sections
-    sections = {}
-    section_headers = [
-        "education", "experience", "work experience", "employment", 
-        "certifications", "certification", "certificates"
-    ]
+    # # Extract education, experience and certifications sections
+    # sections = {}
+    # section_headers = [
+    #     "education", "experience", "work experience", "employment", 
+    #     "certifications", "certification", "certificates"
+    # ]
     
-    lines = text_content.split('\n')
-    current_section = None
-    for line in lines:
-        # Check if this line is a section header
-        for header in section_headers:
-            if re.search(r'\b' + re.escape(header) + r'\b', line, re.IGNORECASE):
-                current_section = header.lower()
-                sections[current_section] = []
-                break
+    # lines = text_content.split('\n')
+    # current_section = None
+    # for line in lines:
+    #     # Check if this line is a section header
+    #     for header in section_headers:
+    #         if re.search(r'\b' + re.escape(header) + r'\b', line, re.IGNORECASE):
+    #             current_section = header.lower()
+    #             sections[current_section] = []
+    #             break
         
-        # Add content to current section
-        if current_section and line.strip() and not any(h in line.lower() for h in section_headers):
-            sections[current_section].append(line.strip())
+    #     # Add content to current section
+    #     if current_section and line.strip() and not any(h in line.lower() for h in section_headers):
+    #         sections[current_section].append(line.strip())
     
-    # Process sections
-    if 'education' in sections:
-        data['education'] = sections['education']
+    # # Process sections
+    # if 'education' in sections:
+    #     data['education'] = sections['education']
     
-    if any(exp in sections for exp in ['experience', 'work experience', 'employment']):
-        exp_key = next((k for k in ['experience', 'work experience', 'employment'] if k in sections), None)
-        if exp_key:
-            data['experience'] = sections[exp_key]
+    # if any(exp in sections for exp in ['experience', 'work experience', 'employment']):
+    #     exp_key = next((k for k in ['experience', 'work experience', 'employment'] if k in sections), None)
+    #     if exp_key:
+    #         data['experience'] = sections[exp_key]
     
-    if any(cert in sections for cert in ['certifications', 'certification', 'certificates']):
-        cert_key = next((k for k in ['certifications', 'certification', 'certificates'] if k in sections), None)
-        if cert_key:
-            data['certifications'] = sections[cert_key]
+    # if any(cert in sections for cert in ['certifications', 'certification', 'certificates']):
+    #     cert_key = next((k for k in ['certifications', 'certification', 'certificates'] if k in sections), None)
+    #     if cert_key:
+    #         data['certifications'] = sections[cert_key]
     
-    # Clean all text sections
-    for key in data:
-        if isinstance(data[key], list) and all(isinstance(item, str) for item in data[key]):
-            # Clean each item in the list
-            cleaned_list = []
-            for item in data[key]:
-                # Remove unnecessary spaces
-                cleaned_item = re.sub(r'\s+', ' ', item).strip()
-                if cleaned_item:
-                    cleaned_list.append(cleaned_item)
-            data[key] = cleaned_list
+    # # Clean all text sections
+    # for key in data:
+    #     if isinstance(data[key], list) and all(isinstance(item, str) for item in data[key]):
+    #         # Clean each item in the list
+    #         cleaned_list = []
+    #         for item in data[key]:
+    #             # Remove unnecessary spaces
+    #             cleaned_item = re.sub(r'\s+', ' ', item).strip()
+    #             if cleaned_item:
+    #                 cleaned_list.append(cleaned_item)
+    #         data[key] = cleaned_list
     
-    # Add raw content to the response
-    data['raw_content'] = text_content
+    # # Add raw content to the response
+    # data['raw_content'] = text_content
     
-    return data
+    # return data
 
 def clean_parsed_data(data):
     """
