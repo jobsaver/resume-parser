@@ -29,6 +29,7 @@ spacy>=3.0.0
 scikit-learn>=1.0.0
 gensim>=4.0.0
 python-dotenv==1.0.1
+fitz
 ```
 
 ### Installation
